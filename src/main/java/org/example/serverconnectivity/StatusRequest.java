@@ -2,7 +2,18 @@ package org.example.serverconnectivity;
 
 public class StatusRequest {
     private String status;
-    private String result; // Added to match the Agent's loop data
+    private String result;
+    private String taskId;// Added to match the Agent's loop data
+
+    public String getTaskId() {
+        return taskId;
+    }
+
+    public void setTaskId(String taskId) {
+        this.taskId = taskId;
+    }
+
+
 
     public StatusRequest() {}
 
