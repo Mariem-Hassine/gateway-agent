@@ -5,6 +5,26 @@ public class StatusRequest {
     private String result;
     private String taskId;// Added to match the Agent's loop data
 
+    private String agentId;
+
+    public String getAgentId() {
+        return agentId;
+    }
+
+    public void setAgentId(String agentId) {
+        this.agentId = agentId;
+    }
+
+    public CurrentState getCurrentState() {
+        return currentState;
+    }
+
+    public void setCurrentState(CurrentState currentState) {
+        this.currentState = currentState;
+    }
+
+    private CurrentState currentState;
+
     public String getTaskId() {
         return taskId;
     }

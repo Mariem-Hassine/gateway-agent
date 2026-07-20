@@ -10,40 +10,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 @RestController
 public class ApiController {
 
-     static class AgentTask {
-        String id;
-        String prompt;
-
-        AgentTask(String id, String prompt) {
-            this.id = id;
-            this.prompt = prompt;
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public void setId(String id) {
-            this.id = id;
-        }
-    }
 
     private final ConcurrentLinkedQueue<AgentTask> taskQueue = new ConcurrentLinkedQueue<>();
-    // 2. Map tracking results for each unique task ID (ID -> Result String)
+    // map tracking results for each unique task ID (ID -> Result String)
     private final ConcurrentHashMap<String, String> resultsMap = new ConcurrentHashMap<>();
     String latestResult = "";
-
-    /*
-    String currentTask = "";
-    public String getCurrentTask() {
-        return currentTask;
-    }
-
-    public void setCurrentTask(String currentTask) {
-        this.currentTask = currentTask;
-    }
-    */
-
+    // to save the agents
+    private final ConcurrentHashMap<String, CurrentState> agentRegistry = new ConcurrentHashMap<>();
 
 
     public String getLatestResult() {
@@ -86,10 +59,18 @@ public class ApiController {
     // This method handles the POST simulation request
     @PostMapping("/api/hello")
     public String handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
-
+        String agentId = agentData.getAgentId();
         String agentStatus = agentData.getStatus();
         String ollamaResult = agentData.getResult();
-        String completedTaskId = agentData.getTaskId(); // Note: Your StatusRequest class will need a "taskId" field!
+        String completedTaskId = agentData.getTaskId();
+
+        // add or update the agent
+        // if already exists it will update the status
+        if (agentId != null && agentData.getCurrentState() != null) {
+            agentRegistry.put(agentId, agentData.getCurrentState());
+            System.out.println("[Registry] Updated metrics for " + agentId
+                    + " (Active Queries: " + agentData.getCurrentState().toString() + ")");
+        }
 
         System.out.println("--- Incoming Sync from Agent ---");
         System.out.println("[Server] Agent Status: " + agentStatus);
@@ -101,11 +82,11 @@ public class ApiController {
             resultsMap.put(completedTaskId, ollamaResult);
         }
 
-        System.out.println("[Gateway] Agent checked in. Current status: " + agentStatus);
+        System.out.println("[Gateway] Agent checked in. Current status: " + agentStatus + "\t \n" + agentData.getCurrentState().toString());
 
         // ─── LONG POLLING WAIT LOOP (Checks the waiting list) ───
         int serverWaitCounter = 0;
-        // Hold the agent's request open up to 30 seconds if the waiting list is empty
+        // Hold the agent's request open up to 30 seconds if the waiting list is emptyt
         while (taskQueue.isEmpty() && serverWaitCounter < 30) {
             Thread.sleep(1000);
             serverWaitCounter++;
