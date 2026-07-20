@@ -1,16 +1,135 @@
+import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+//import net.thenuts.naf.exec.NExec;
+import net.thevpc.nuts.*;
+import net.thevpc.nuts.command.NExec;
+import org.springframework.web.client.RestTemplate;
 
 public class Agent {
     private final String gateway_url= "http://192.168.1.119:8080/api/hello";
+    //private final String gateway_url = "http://192.168.1.6:8080/api/hello";
     //file d'attente pour stocker les taches recu du gateway
     private final LinkedBlockingQueue<String> tasks = new LinkedBlockingQueue<>();
-    public void start() {
+
+    // recuperer le nom du modele deja existant et l'installe s'il n'existe pas
+    public String extraireNomModele(String nomModelRequis) throws Exception{
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest .newBuilder()
+                .uri(URI.create("http://localhost:11434/api/tags"))
+                .GET()
+                .build();
+        HttpResponse<String> response= client.send(request,HttpResponse.BodyHandlers.ofString());//response sous forme json
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root =mapper.readTree(response.body());
+        //parcours la liste des modeles
+        JsonNode models=root.get("models");
+        for(JsonNode model : models){
+            if(model.get("name").asText().equals(nomModelRequis)){
+                return"modele trouvé!";
+            }
+        }
+        // Accès au premier modèle de la liste
+        //String nomModele = root.get("models").get(0).get("name").asText();
+
+        System.out.println("Modèle  " + nomModelRequis+"non trouvé.lancement de l'installation...");
+        installerModel(nomModelRequis);
+        return "modele desiré installé";
+    }
+
+    private void installerModel(String nomModelRequis) {
+        System.out.println("debut de l'installation du modele:"+nomModelRequis);
+        try{
+            String cmd="ollama pull"+nomModelRequis;
+            String res = String.valueOf(NExec.of(cmd).system());
+            System.out.println("installation terminée;"+"details:"+res);
+
+        }catch(Exception e){
+            System.out.println("erreur au cour de l'installation du modele desirée"+e.getMessage());
+        }
+    }
+    public void testExtractionGPU() {
+        try {
+            System.out.println("--- DÉBUT DU TEST D'EXTRACTION GPU ---");
+
+            // Appel direct de votre méthode existante
+            List<Map<String, Object>> modelsInfo = lireOllamaPs();
+
+            if (modelsInfo.isEmpty()) {
+                System.out.println("Aucun modèle actif trouvé sur Ollama.");
+            } else {
+                for (Map<String, Object> model : modelsInfo) {
+                    System.out.println("------------------------------------");
+                    System.out.println("Modèle : " + model.get("name"));
+                    System.out.println("VRAM utilisée : " + model.get("size_vram") + " bytes");
+                    System.out.println("Expiration : " + model.get("expires_at"));
+                }
+            }
+
+            System.out.println("------------------------------------");
+            System.out.println("--- FIN DU TEST D'EXTRACTION ---");
+
+        } catch (Exception e) {
+            System.err.println("Erreur lors de la récupération des données GPU : " + e.getMessage());
+            System.err.println("Assurez-vous que Ollama est bien lancé (ollama serve).");
+        }
+    }
+   /* public void preparerStatus() {
+        try {
+            List<Map<String,Object>> Infos = lireOllamaPs();
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest .newBuilder()
+                    .uri(URI.create("http://localhost:11434/api/ps"))
+                    .GET()
+                    .build();
+            HttpResponse<String> response= client.send(request,HttpResponse.BodyHandlers.ofString());//response sous form json
+            System.out.println("Code retour : " + response.statusCode());
+            System.out.println("Corps de la réponse : " + response.body());
+
+        } catch (Exception e) {
+            System.err.println("Erreur lors de l'envoi : " + e.getMessage());
+        }
+    }*/
+
+    // Appelle l'API locale d'Ollama et parse le JSON en List<Map>
+    public List<Map<String, Object>> lireOllamaPs() throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:11434/api/ps"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(response.body());
+        JsonNode modelsNode = root.get("models");
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (modelsNode != null && modelsNode.isArray()) {
+            for (JsonNode modelNode : modelsNode) {
+                Map<String, Object> modelInfo = new HashMap<>();
+                modelInfo.put("name", modelNode.get("name").asText());
+                modelInfo.put("size_vram", modelNode.get("size_vram").asLong());
+                modelInfo.put("expires_at", modelNode.get("expires_at").asText());
+                result.add(modelInfo);
+            }
+        }
+        return result;
+    }
+
+    /*public void start() {
         //thread1(producteur): recupere les taches du gateway et le mettent dans la file
         Thread producteur = new Thread(() -> {
             while (true) {
@@ -41,6 +160,38 @@ public class Agent {
         );
         producteur.start();
         consommateur.start();
+    }*/
+    public void start() {
+        // 1. Thread producteur : Injecte une tâche de test au lieu d'appeler le réseau
+        Thread producteur = new Thread(() -> {
+            try {
+                // On attend 2 secondes pour laisser le temps d'extraire les modèles
+                Thread.sleep(2000);
+                String tacheTest = "Explique le multithreading en Java avec exemples de code";
+                tasks.put(tacheTest);
+                System.out.println("[TEST] Tâche injectée dans la file : " + tacheTest);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+
+        // 2. Thread consommateur : Appelle Ollama mais NE PAS envoie à la Gateway
+        Thread consommateur = new Thread(() -> {
+            while (true) {
+                try {
+                    String tache = tasks.take();
+                    String resOllama = processeur(tache);
+
+                    // IMPORTANT : On affiche le résultat ici au lieu d'appeler sendResToGW
+                    System.out.println("[TEST] Résultat final obtenu : " + resOllama);
+
+                } catch (Exception e) {
+                    System.err.println("Erreur : " + e.getMessage());
+                }
+            }
+        });
+        producteur.start();
+        consommateur.start();
     }
 
     private void sendResToGW(String res) throws Exception {
@@ -54,75 +205,36 @@ public class Agent {
         client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-
-    /*String etat = "{\"status\": \"pret\"}";
-    while(true){
-    //construction des requetes
-        HttpClient connect = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-
-        HttpRequest request_connect = HttpRequest.newBuilder()
-                .uri(URI.create(gateway_url))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(150))
-                .POST(HttpRequest.BodyPublishers.ofString(etat))
-                .build();
-
-        try{
-            //envoie de requete et attente de response
-            HttpResponse<String> response = connect.send(request_connect, HttpResponse.BodyHandlers.ofString());//response reçu par l'Agent
-            if(response.statusCode()!=200){
-                System.err.println("[Agent] Alerte : Serveur Gateway injoignable ou erreur " + response.statusCode());
-                return; // On arrête l'exécution car on ne peut pas travailler
-            }
-            String task = response.body();//extraction du contenu reel de la response
-            System.out.println("[agent] tache recue : "+task);
-            String resOllama = processeur(task);
-            String jsonResultat = "{\"status\": \"termine\", \"result\": \"" + resOllama.replace("\"", "\\\"") + "\"}";
-
-            HttpRequest request_envoi = HttpRequest.newBuilder()
-                    .uri(URI.create(gateway_url))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonResultat)) // Envoie {"status":"...", "result":"..."}
-                    .build();
-
-            // Envoi effectif du résultat
-            HttpResponse<String> responseFinale = connect.send(request_envoi, HttpResponse.BodyHandlers.ofString());
-            System.out.println("[Agent] Résultat envoyé. Statut Gateway : " + responseFinale.statusCode());
-        } catch (java.net.ConnectException e) {
-            // Cas spécifique : Le serveur n'est pas démarré (Refused)
-            System.err.println("[Agent] Erreur critique : Impossible de contacter la Gateway (Serveur éteint ?)");
-        } catch (java.net.http.HttpConnectTimeoutException e) {
-            // Cas spécifique : Le réseau est trop lent ou le serveur est gelé
-            System.err.println("[Agent] Erreur : Timeout de connexion.");
-        } catch (Exception e) {
-            System.err.println("[Agent] Erreur imprévue : " + e.getMessage());
-        }
-}
-}*/
     //methode de recuperation d'une tache
         private String recuperertache() throws Exception{
-            HttpClient client= HttpClient.newHttpClient();
+            List<Map<String, Object>> modelsInfo = lireOllamaPs();//extraction des données réels
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("pc_id", System.getProperty("user.name") + "@" + java.net.InetAddress.getLocalHost().getHostName());
+            payload.put("status", "pret");
+            payload.put("models", modelsInfo);
+            // Conversion en JSON
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonPayload = mapper.writeValueAsString(payload);
+            HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(gateway_url))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString("{\"status\": \"pret\"}"))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload)) // <--- Utilisation du vrai JSON
                     .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.body() == null || response.body().isEmpty()) {
-                return null; // Évite le null pointer
-            }
-            return response.body();
 
-            //return (response.statusCode() == 200) ? response.body() : null;
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200 && response.body() != null && !response.body().isEmpty()) {
+                return response.body();
+            }
+            return null;
         }
 
         private String processeur (String task){
             System.out.println("[Agent] Envoi à Ollama de : " + task);
 
             // Le JSON attendu par Ollama (/api/generate)
-            String jsonPayload = "{\"model\": \"llama3\", \"prompt\": \"" + task + "\", \"stream\": false}";
+            String jsonPayload = "{\"model\": \"qwen2:0.5b\", \"prompt\": \"" + task + "\", \"stream\": false}";
 
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
