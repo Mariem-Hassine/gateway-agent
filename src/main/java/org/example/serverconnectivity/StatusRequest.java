@@ -1,10 +1,13 @@
 package org.example.serverconnectivity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class StatusRequest {
     private String status;
     private String result;
+    @JsonProperty("task_id")
     private String taskId;// Added to match the Agent's loop data
-
+    @JsonProperty("pc_id")
     private String agentId;
 
     public String getAgentId() {
@@ -14,7 +17,7 @@ public class StatusRequest {
     public void setAgentId(String agentId) {
         this.agentId = agentId;
     }
-
+/*
     public CurrentState getCurrentState() {
         return currentState;
     }
@@ -24,7 +27,7 @@ public class StatusRequest {
     }
 
     private CurrentState currentState;
-
+*/
     public String getTaskId() {
         return taskId;
     }

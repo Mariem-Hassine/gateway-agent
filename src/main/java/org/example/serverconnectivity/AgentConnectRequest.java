@@ -7,6 +7,7 @@ public class AgentConnectRequest {
     @JsonProperty("pc_id")
     private String pcId;
 
+    // does not need annotation because it matches by default since they are defined the same
     private String status;
 
     @JsonProperty("total_vram_capacity")

@@ -1,5 +1,6 @@
 package org.example.serverconnectivity;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -10,23 +11,22 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 @RestController
 public class ApiController {
 
+    // all maps :
+    // one for received tasks
+    // one for results sent from the agent waiting to get set
+    // one
+
     // list for the received tasks form the user
     private final ConcurrentLinkedQueue<AgentTask> taskQueue = new ConcurrentLinkedQueue<>();
     // map tracking results for each unique task ID (ID -> Result String) that we get from the agent
     private final ConcurrentHashMap<String, String> resultsMap = new ConcurrentHashMap<>();
-    String latestResult = "";
 
-    // to save the agents
-    private final ConcurrentHashMap<String, CurrentState> agentRegistry = new ConcurrentHashMap<>();
+    // to save the agents (may delete later idk)
+    //private final ConcurrentHashMap<String, CurrentState> agentRegistry = new ConcurrentHashMap<>();
 
+    // Map to hold raw agent hardware metrics sent during initial connection from api/connect
+    private final ConcurrentHashMap<String, AgentConnectRequest> agentHardwareRegistry = new ConcurrentHashMap<>();
 
-    public String getLatestResult() {
-        return latestResult;
-    }
-
-    public void setLatestResult(String latestResult) {
-        this.latestResult = latestResult;
-    }
 
    // used before for init connectivity test , useless for now just kept for vibes
     @GetMapping("/api/hello")
@@ -57,56 +57,68 @@ public class ApiController {
         return finalResult != null ? finalResult : "Request timed out."; // in case of a timeout we send a msg indicating so
     }
 
-    @PostMapping("/api/hello")
-    public String handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
-
-        String agentId = agentData.getAgentId();
-        // we will remove this later as it will be given by the agent via another api
-        String agentStatus = agentData.getStatus();
-        String ollamaResult = agentData.getResult();
-        String completedTaskId = agentData.getTaskId();
-
-        // add or update the agent
-        // if already exists it will update the status
-        if (agentId != null && agentData.getCurrentState() != null) {
-            agentRegistry.put(agentId, agentData.getCurrentState());
-            System.out.println("[Registry] Updated metrics for " + agentId
-                    + " (Active Queries: " + agentData.getCurrentState().toString() + ")");
+    @PostMapping("/api/connect")
+    public ResponseEntity<String> handleAgentConnect(@RequestBody AgentConnectRequest connectData) {
+        if (connectData.getPcId() == null || connectData.getPcId().isEmpty()) {
+            return ResponseEntity.badRequest().body("Invalid Request: pc_id missing.");
         }
+
+        // Store agent specs in registry
+        agentHardwareRegistry.put(connectData.getPcId(), connectData);
+
+        System.out.println("=== AGENT REGISTERED (/api/connect) ===");
+        System.out.println("[Registry] Agent: " + connectData.getPcId());
+        System.out.println("[Registry] CPU Cores: " + connectData.getCpuCores());
+        System.out.println("[Registry] Free VRAM: " + connectData.getVramAvailable() + " / " + connectData.getTotalVramCapacity());
+
+        return ResponseEntity.ok("Connexion enregistrée avec succès.");
+    }
+
+    @PostMapping("/api/hello")
+    public ResponseEntity<String> handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
+
+        String completedTaskId = agentData.getTaskId();
+        String agentResult = agentData.getResult();
+        String agentStatus = agentData.getStatus();
 
         System.out.println("--- Incoming Sync from Agent ---");
         System.out.println("[Server] Agent Status: " + agentStatus);
 
-        // If the agent brought back a completed result, store it under its specific ID
-        if (ollamaResult != null && completedTaskId != null) {
+        // 1. Process completed task result from agent if present
+        if (agentResult != null && completedTaskId != null) {
             System.out.println("[Gateway] Agent delivered result for Task " + completedTaskId);
-            System.out.println("[Gateway] Agent delivered the following result " + ollamaResult);
-            // takes in the response and store it to send it to the user
-            resultsMap.put(completedTaskId, ollamaResult);
+            System.out.println("[Gateway] Result content: " + agentResult);
+            resultsMap.put(completedTaskId, agentResult);
         }
-        // for when the agent connects successfully
-        System.out.println("[Gateway] Agent checked in. Current status: " + agentStatus + "\t \n" + agentData.getCurrentState().toString());
 
-        // ─── LONG POLLING WAIT LOOP (Checks the waiting list) ───
+        // Look up stored hardware details from the registry using pc_id
+        AgentConnectRequest hardwareProfile = agentHardwareRegistry.get(agentData.getAgentId());
+
+        // checks if the agent connected before or not
+        if (hardwareProfile != null) {
+            System.out.println("[Gateway] Agent checked in (" + agentData.getAgentId() + "). " +
+                    "VRAM Available: " + hardwareProfile.getVramAvailable() + " bytes");
+        } else {
+            System.out.println("[Gateway] Warning: Unregistered agent checked in: " + agentData.getAgentId());
+        }
+
+        // 2. LONG POLLING WAIT LOOP (Wait up to 30s for a task in the queue) only if there is no queue is empty
         int serverWaitCounter = 0;
-        // Hold the agent's request open up to 30 seconds if the waiting list is empty aka long pooling
         while (taskQueue.isEmpty() && serverWaitCounter < 30) {
             Thread.sleep(1000);
             serverWaitCounter++;
         }
 
-        // ─── TREAT THE NEXT PROMPT IN LINE ───
-        // poll() automatically grabs and removes the OLDEST item at the front of the queue to prepere for the next task
+        // 3. Dispatch task or return timeout signal
         AgentTask nextTask = taskQueue.poll();
 
         if (nextTask != null) {
-            System.out.println("[Server] Dispatching task [" + nextTask.id+ "] to Agent: " + nextTask.prompt);
-
-            return  nextTask.id + "|||" + nextTask.prompt;
-            // nextTask.id + "|||" + fazat il id raja3ha imbba3d
+            System.out.println("[Server] Dispatching task [" + nextTask.id + "] to Agent: " + nextTask.prompt);
+            // Returns "taskId|||prompt" string as expected by your current setup
+            return ResponseEntity.ok(nextTask.id + "|||" + nextTask.prompt);
         } else {
             System.out.println("[Server] Long poll timed out. Waiting list is empty.");
-            return "WAIT_NO_TASKS_AVAILABLE";
+            return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
         }
     }
 }
