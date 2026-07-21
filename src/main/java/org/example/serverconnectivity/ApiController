@@ -1,0 +1,342 @@
+package org.example.serverconnectivity;
+
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+@CrossOrigin(origins = "*")
+@RestController
+public class ApiController {
+
+     static class AgentTask {
+        String id;
+        String prompt;
+
+        AgentTask(String id, String prompt) {
+            this.id = id;
+            this.prompt = prompt;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+    }
+
+    private final ConcurrentLinkedQueue<AgentTask> taskQueue = new ConcurrentLinkedQueue<>();
+    // map tracking results for each unique task ID (ID -> Result String)
+    private final ConcurrentHashMap<String, String> resultsMap = new ConcurrentHashMap<>();
+    String latestResult = "";
+    // to save the agents
+    private final ConcurrentHashMap<String, CurrentState> agentRegistry = new ConcurrentHashMap<>();
+
+
+    public String getLatestResult() {
+        return latestResult;
+    }
+
+    public void setLatestResult(String latestResult) {
+        this.latestResult = latestResult;
+    }
+
+
+
+    @GetMapping("/api/hello")
+    public String sayHello(@RequestParam(value = "name", defaultValue = "World") String name) {
+        return String.format("Hello, %s! Your HTTP request successfully reached my TCP port!", name);
+    }
+
+    @PostMapping("/api/ask")
+    public String receiveUserQuery(@RequestBody String query) throws InterruptedException{
+    //public String receiveUserQuery(@RequestParam(value = "query")String query) throws InterruptedException
+        System.out.println("[Gateway] Received query from User: " + query);
+
+        String taskId = UUID.randomUUID().toString();
+
+        // Add to queue and initialize the map with a pending status
+        taskQueue.add(new AgentTask(taskId, query));
+        resultsMap.put(taskId, "En attente de traitement...");
+
+        // Wait only for THIS specific task ID's result to change
+        int timeoutCounter = 0;
+        while (resultsMap.get(taskId).equals("En attente de traitement...") && timeoutCounter < 30) {
+            Thread.sleep(6000);
+            timeoutCounter++;
+        }
+
+        // Retrieve the result, clean up the map, and return it to the user
+        String finalResult = resultsMap.remove(taskId);
+        return finalResult != null ? finalResult : "Request timed out."; // in case of a timeout we send a msg indicating so
+    }
+    // This method handles the POST simulation request
+    @PostMapping("/api/hello")
+    public String handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
+        String agentId = agentData.getAgentId();
+        String agentStatus = agentData.getStatus();
+        String ollamaResult = agentData.getResult();
+        String completedTaskId = agentData.getTaskId();
+
+        // add or update the agent
+        // if already exists it will update the status
+        if (agentId != null && agentData.getCurrentState() != null) {
+            agentRegistry.put(agentId, agentData.getCurrentState());
+            System.out.println("[Registry] Updated metrics for " + agentId
+                    + " (Active Queries: " + agentData.getCurrentState().toString() + ")");
+        }
+
+        System.out.println("--- Incoming Sync from Agent ---");
+        System.out.println("[Server] Agent Status: " + agentStatus);
+
+        // If the agent brought back a completed result, store it under its specific ID
+        if (ollamaResult != null && completedTaskId != null) {
+            System.out.println("[Gateway] Agent delivered result for Task " + completedTaskId);
+            System.out.println("[Gateway] Agent delivered the following result " + ollamaResult);
+            resultsMap.put(completedTaskId, ollamaResult);
+        }
+
+        System.out.println("[Gateway] Agent checked in. Current status: " + agentStatus + "\t \n" + agentData.getCurrentState().toString());
+
+        // ─── LONG POLLING WAIT LOOP (Checks the waiting list) ───
+        int serverWaitCounter = 0;
+        // Hold the agent's request open up to 30 seconds if the waiting list is emptyt
+        while (taskQueue.isEmpty() && serverWaitCounter < 30) {
+            Thread.sleep(1000);
+            serverWaitCounter++;
+        }
+
+        // ─── TREAT THE NEXT PROMPT IN LINE ───
+        // poll() automatically grabs and removes the OLDEST item at the front of the queue
+        AgentTask nextTask = taskQueue.poll();
+
+        if (nextTask != null) {
+            System.out.println("[Server] Dispatching task [" + nextTask.id+ "] to Agent: " + nextTask.prompt);
+
+            return  nextTask.id + "|||" + nextTask.prompt;
+            // nextTask.id + "|||" + fazat il id raja3ha imbba3d
+        } else {
+            System.out.println("[Server] Long poll timed out. Waiting list is empty.");
+            return "WAIT_NO_TASKS_AVAILABLE";
+        }
+    }
+}
+
+
+
+/----------------------------- WITH MULTI THREADING ---------------------------------------/
+package org.example.serverconnectivity;
+
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+@CrossOrigin(origins = "*")
+@RestController
+public class ApiController {
+
+
+    // Every agent gets its own private queue of tasks
+    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<AgentTask>> agentQueues = new ConcurrentHashMap<>();
+    // Tracks the last time an agent checked in (Heartbeat)
+    private final ConcurrentHashMap<String, Long> agentLastSeen = new ConcurrentHashMap<>();
+    // map tracking results for each unique task ID (ID -> Result String)
+    private final ConcurrentHashMap<String, String> resultsMap = new ConcurrentHashMap<>();
+    String latestResult = "";
+    // to save the agents
+    private final ConcurrentHashMap<String, CurrentState> agentRegistry = new ConcurrentHashMap<>();
+
+
+    public String getLatestResult() {
+        return latestResult;
+    }
+
+    public void setLatestResult(String latestResult) {
+        this.latestResult = latestResult;
+    }
+    // REMENBER TO CHECK THIS SHIT
+    private String selectBestAgentId() {
+        String bestAgentId = null;
+        double lowestLoadScore = Double.MAX_VALUE;
+
+        for (String agentId : agentRegistry.keySet()) {
+            CurrentState state = agentRegistry.get(agentId);
+            if (state == null) continue;
+
+            // Load Metric Score Formula: (Active Queries + 1) / (Capacity * CPU Performance)
+            // A lower score means the agent is less busy or significantly more powerful.
+            double loadScore = (state.getActiveQueries() + 1) / (state.getCapacity() * (state.getCPUPower() / 100.0));
+
+            if (loadScore < lowestLoadScore) {
+                lowestLoadScore = loadScore;
+                bestAgentId = agentId;
+            }
+        }
+        return bestAgentId;
+    }
+
+
+
+    @GetMapping("/api/hello")
+    public String sayHello(@RequestParam(value = "name", defaultValue = "World") String name) {
+        return String.format("Hello, %s! Your HTTP request successfully reached my TCP port!", name);
+    }
+
+    @PostMapping("/api/ask")
+    public String receiveUserQuery(@RequestBody String query) throws InterruptedException {
+        if (agentRegistry.isEmpty()) {
+            return "ERROR: No computing agents are currently connected.";
+        }
+
+        System.out.println("[Gateway] Received query from User: " + query);
+        String taskId = UUID.randomUUID().toString();
+        AgentTask newTask = new AgentTask(taskId, query);
+
+        // 1. Dynamic Selection Math
+        String targetAgentId = selectBestAgentId();
+        if (targetAgentId == null) {
+            return "ERROR: Load balancer failed to find a valid worker node.";
+        }
+
+        System.out.println("[Router] Directing Task " + taskId + " to Agent -> " + targetAgentId);
+
+        // 2. Insert into the target agent's private queue
+        agentQueues.get(targetAgentId).add(newTask);
+        resultsMap.put(taskId, "En attente de traitement...");
+
+        // 3. Increment their active load tracking
+        CurrentState state = agentRegistry.get(targetAgentId);
+        if (state != null) {
+            state.setActiveQueries(state.getActiveQueries() + 1);
+        }
+
+        // 4. Wait for the agent to finish processing
+        int timeoutCounter = 0;
+        while (resultsMap.get(taskId).equals("En attente de traitement...") && timeoutCounter < 30) {
+            Thread.sleep(2000); // Shorter sleep time makes user response snappier
+            timeoutCounter++;
+        }
+
+        String finalResult = resultsMap.remove(taskId);
+        return finalResult != null ? finalResult : "Request timed out.";
+    }
+    // This method handles the POST simulation request
+    @PostMapping("/api/hello")
+    public String handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
+        String agentId = agentData.getAgentId();
+        if (agentId == null) {
+            return "ERROR_MISSING_AGENT_ID";
+        }
+
+        // 1. Dynamic Onboarding: Create a private queue if it's a new agent
+        if (!agentQueues.containsKey(agentId)) {
+            System.out.println("[Registry] Dynamically onboarded new agent: " + agentId);
+            agentQueues.put(agentId, new ConcurrentLinkedQueue<>());
+        }
+
+        // 2. Track Heartbeat & Metrics
+        agentLastSeen.put(agentId, System.currentTimeMillis());
+        if (agentData.getCurrentState() != null) {
+            agentRegistry.put(agentId, agentData.getCurrentState());
+        }
+        String agentStatus = agentData.getStatus();
+        String ollamaResult = agentData.getResult();
+        String completedTaskId = agentData.getTaskId();
+
+        // add or update the agent
+        // if already exists it will update the status
+        if (agentId != null && agentData.getCurrentState() != null) {
+            agentRegistry.put(agentId, agentData.getCurrentState());
+            System.out.println("[Registry] Updated metrics for " + agentId
+                    + " (Active Queries: " + agentData.getCurrentState().toString() + ")");
+        }
+
+        System.out.println("--- Incoming Sync from Agent ---");
+        System.out.println("[Server] Agent Status: " + agentStatus);
+
+        // If the agent brought back a completed result, store it under its specific ID
+        if (ollamaResult != null && completedTaskId != null) {
+            System.out.println("[Gateway] Agent delivered result for Task " + completedTaskId);
+            System.out.println("[Gateway] Agent delivered the following result " + ollamaResult);
+
+            // 1. Store the final result so the waiting user thread can grab it
+            resultsMap.put(completedTaskId, ollamaResult);
+
+            // 2. Decrement the agent's workload count since this task is finished
+            CurrentState state = agentRegistry.get(agentId);
+            if (state != null && state.getActiveQueries() > 0) {
+                state.setActiveQueries(state.getActiveQueries() - 1);
+                System.out.println("[Registry] Decremented active queries for " + agentId + ". Current: " + state.getActiveQueries());
+            }
+        }
+
+        System.out.println("[Gateway] Agent checked in. Current status: " + agentStatus + "\t \n" + agentData.getCurrentState().toString());
+
+        // ─── LONG POLLING WAIT LOOP (Checks the waiting list) ───
+        int serverWaitCounter = 0;
+        ConcurrentLinkedQueue<AgentTask> myQueue = agentQueues.get(agentId);
+
+        // Hold this specific agent open up to 30 seconds if THEIR queue is empty
+        while ((myQueue == null || myQueue.isEmpty()) && serverWaitCounter < 30) {
+            Thread.sleep(1000);
+            serverWaitCounter++;
+
+            // Safety check: If a background thread evicted this agent while waiting, exit early
+            if (!agentRegistry.containsKey(agentId)) {
+                return "WAIT_NO_TASKS_AVAILABLE";
+            }
+        }
+        // ─── TREAT THE NEXT PROMPT IN LINE ───
+        // poll() automatically grabs and removes the OLDEST item at the front of the queue
+        AgentTask nextTask = (myQueue != null) ? myQueue.poll() : null;
+
+        if (nextTask != null) {
+            System.out.println("[Server] Dispatching task [" + nextTask.id+ "] to Agent: " + nextTask.prompt);
+
+            return  nextTask.id + "|||" + nextTask.prompt;
+            // nextTask.id + "|||" + fazat il id raja3ha imbba3d
+        } else {
+            System.out.println("[Server] Long poll timed out. Waiting list is empty.");
+            return "WAIT_NO_TASKS_AVAILABLE";
+        }
+    }
+
+    public ApiController() {
+        startEvictionWorker();
+    }
+
+    private void startEvictionWorker() {
+        Thread evictionThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(10000); // Run verification sweep every 10 seconds
+                    long now = System.currentTimeMillis();
+
+                    for (String agentId : agentLastSeen.keySet()) {
+                        long lastSeen = agentLastSeen.get(agentId);
+
+                        // Disconnection threshold: 45 seconds of absolute silence
+                        if (now - lastSeen > 45000) {
+                            System.out.println("[Watchdog] Agent " + agentId + " disappeared. Evicting from cluster...");
+
+                            // Clean up structures completely
+                            agentRegistry.remove(agentId);
+                            agentLastSeen.remove(agentId);
+                            agentQueues.remove(agentId);
+                        }
+                    }
+                } catch (Exception e) {
+                    System.out.println("[Watchdog Error]: " + e.getMessage());
+                }
+            }
+        });
+        evictionThread.setDaemon(true); // Ensures thread exits automatically when app closes
+        evictionThread.start();
+    }
+}
+
