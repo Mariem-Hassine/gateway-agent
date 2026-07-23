@@ -1,0 +1,118 @@
+/* Style the main background of the chat app */
+html, body {
+  height: 100%;
+  margin: 0;
+  background-color: #f8f9fa; /* Light, clean gray backdrop */
+}
+
+/* 2. Center the container vertically and horizontally on the entire screen */
+.full-screen-wrapper {
+  height: 100vh; /* 100% of the Viewport Height */
+  display: flex;
+  align-items: center; /* Vertical centering */
+  justify-content: center; /* Horizontal centering */
+}
+
+/* 3. Make the card take up a great height, e.g., 80% of the viewport */
+.chat-card {
+  height: 80vh; 
+  display: flex;
+  flex-direction: column;
+}
+
+/* 4. Force the chat history box to take up all available remaining vertical space */
+.chat-history {
+  flex-grow: 1; /* Takes up all space between header and footer */
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.container {
+  max-width: 800px;
+}
+
+/* Make the chat window feel like a real native app container */
+.card {
+  border: none;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Custom modern scrollbar styling for the chat history */
+.card-body {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.card-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-body::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.card-body::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* Custom Chat Bubble Styling */
+.chat-bubble {
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: inline-block; /* Behave like a block of text */
+  word-break: normal;    /* Never split single words into characters */
+  overflow-wrap: anywhere; /* Safely wrap long links if they hit the edge */
+}
+
+/* Smooth fade-in animation when messages appear */
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-message {
+  animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Sender Bubble (You) - Rounded on all corners except bottom-right */
+.bubble-me {
+  background: linear-gradient(135deg, #0d6efd, #0b5ed7) !important;
+  color: white !important;
+  border-radius: 18px 18px 4px 18px !important;
+}
+
+/* Receiver Bubble (Friend) - Rounded on all corners except bottom-left */
+.bubble-friend {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+  border: 1px solid #e9ecef;
+  border-radius: 18px 18px 18px 4px !important;
+}
+
+/* Make the input field feel more pill-shaped and modern */
+.form-control {
+  border-radius: 24px;
+  padding-left: 18px;
+  border: 1px solid #dee2e6;
+}
+
+.form-control:focus {
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+  border-color: #0d6efd;
+}
+
+/* Pill-shaped Send Button */
+.btn-send {
+  border-radius: 24px;
+  padding: 8px 24px;
+  font-weight: 500;
+}

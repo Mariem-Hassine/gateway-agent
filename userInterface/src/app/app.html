@@ -1,0 +1,64 @@
+<div class="full-screen-wrapper">
+  <div class="col-md-6 col-lg-10 col-11"> 
+    
+    <div class="card shadow-lg chat-card">
+      
+      <div class="card-header bg-primary text-white py-3 border-0 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-white text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-weight: bold;">
+            A
+          </div>
+          <h6 class="mb-0">Angular Chat</h6>
+        </div>
+      </div>
+
+      <div #scrollContainer class="card-body bg-light d-flex flex-column gap-3 chat-history">
+        
+        @for (msg of messages(); track msg.text) {
+          <div class="d-flex w-100 animate-message" 
+               [class.justify-content-end]="msg.isMe" 
+               [class.justify-content-start]="!msg.isMe">
+            
+            <div class="d-flex flex-column"
+                 [class.align-items-end]="msg.isMe"
+                 [class.align-items-start]="!msg.isMe"
+                 style="max-width: 75%;"> 
+              
+              <div class="chat-bubble"
+                   [class.bubble-me]="msg.isMe"
+                   [class.bubble-friend]="!msg.isMe">
+                {{ msg.text }}
+              </div>
+              
+              <small class="text-muted mt-1 px-2" style="font-size: 0.75rem;">
+                {{ msg.isMe ? 'You' : 'Friend' }}
+              </small>
+            </div>
+
+          </div>
+        } @empty {
+          <p class="text-center text-muted my-auto">No messages yet. Say hello!</p>
+        }
+
+      </div>
+
+      <div class="card-footer bg-white py-3 border-0 flex-shrink-0">
+        <form class="d-flex gap-2">
+          <input type="text" 
+                 name="messageInput"
+                 class="form-control shadow-sm" 
+                 placeholder="Type a message..." 
+                 [(ngModel)]="newMessageText">
+          
+          <button type="submit" 
+                  class="btn btn-primary btn-send shadow-sm" 
+                  (click)="$event.preventDefault(); sendMessage()">
+            Send
+          </button>
+        </form>
+      </div>
+
+    </div>
+
+  </div>
+</div>
