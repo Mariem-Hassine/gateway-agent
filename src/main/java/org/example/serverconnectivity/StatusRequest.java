@@ -1,21 +1,22 @@
 package org.example.serverconnectivity;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class StatusRequest {
-    private String status;
+    //private String status;
     private String result;
     @JsonProperty("task_id")
     private String taskId;// Added to match the Agent's loop data
-    @JsonProperty("pc_id")
-    private String agentId;
+    @JsonAlias({"agentId", "pc_id", "agent_id", "pcId","idAgent"})
+    private String idAgent;
 
-    public String getAgentId() {
-        return agentId;
+    public String getIdAgent() {
+        return idAgent;
     }
 
     public void setAgentId(String agentId) {
-        this.agentId = agentId;
+        this.idAgent = agentId;
     }
 /*
     public CurrentState getCurrentState() {
@@ -40,8 +41,8 @@ public class StatusRequest {
 
     public StatusRequest() {}
 
-    public String getStatus() { return this.status; }
-    public void setStatus(String status) { this.status = status; }
+   // public String getStatus() { return this.status; }
+    //public void setStatus(String status) { this.status = status; }
 
     public String getResult() { return this.result; }
     public void setResult(String result) { this.result = result; }

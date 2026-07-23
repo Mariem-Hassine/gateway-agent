@@ -14,7 +14,7 @@ public class ApiController {
     // all maps :
     // one for received tasks
     // one for results sent from the agent waiting to get set
-    // one
+    // one agent's data
 
     // list for the received tasks form the user
     private final ConcurrentLinkedQueue<AgentTask> taskQueue = new ConcurrentLinkedQueue<>();
@@ -26,8 +26,8 @@ public class ApiController {
 
     // Map to hold raw agent hardware metrics sent during initial connection from api/connect
     private final ConcurrentHashMap<String, AgentConnectRequest> agentHardwareRegistry = new ConcurrentHashMap<>();
-
-
+    //
+    //private final ConcurrentHashMap<String, AgentSession> agentRegistry = new ConcurrentHashMap<>();
    // used before for init connectivity test , useless for now just kept for vibes
     @GetMapping("/api/hello")
     public String sayHello(@RequestParam(value = "name", defaultValue = "World") String name) {
@@ -57,67 +57,99 @@ public class ApiController {
         return finalResult != null ? finalResult : "Request timed out."; // in case of a timeout we send a msg indicating so
     }
 
+    // owo --------------------------------------------------------------------- owo //
+    // owo ------------------------- connect API-------------------------------- owo //
+    // owo --------------------------------------------------------------------- owo //
+
     @PostMapping("/api/connect")
     public ResponseEntity<String> handleAgentConnect(@RequestBody AgentConnectRequest connectData) {
-        if (connectData.getPcId() == null || connectData.getPcId().isEmpty()) {
-            return ResponseEntity.badRequest().body("Invalid Request: pc_id missing.");
+        if (connectData.getIdAgent() == null || connectData.getIdAgent().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Invalid Request: idAgent missing.");
         }
 
-        // Store agent specs in registry
-        agentHardwareRegistry.put(connectData.getPcId(), connectData);
+        // 2. Store agent specs in registry using idAgent
+        agentHardwareRegistry.put(connectData.getIdAgent(), connectData);
 
+        // 3. Log updated specs with new attributes and collection formats
         System.out.println("=== AGENT REGISTERED (/api/connect) ===");
-        System.out.println("[Registry] Agent: " + connectData.getPcId());
-        System.out.println("[Registry] CPU Cores: " + connectData.getCpuCores());
-        System.out.println("[Registry] Free VRAM: " + connectData.getVramAvailable() + " / " + connectData.getTotalVramCapacity());
+        System.out.println("[Registry] Agent ID: " + connectData.getIdAgent());
+        System.out.println("[Registry] VRAM: " + connectData.getVram() + " MB");
+        System.out.println("[Registry] CPU Current Load: " + connectData.getCpu() + "% / Max: " + connectData.getMaxCpu() + "%");
+        System.out.println("[Registry] GPU Current Load: " + connectData.getGpu() + "% / Max: " + connectData.getMaxGpu() + "%");
+        System.out.println("[Registry] Disk Usage: " + connectData.getDiskUsage() + "%");
+
+        // Logging Collections (Lists & Map)
+        if (connectData.getModelsInVRAM() != null) {
+            System.out.println("[Registry] Models in VRAM: " + String.join(", ", connectData.getModelsInVRAM()));
+        }
+
+        if (connectData.getAvailableModels() != null) {
+            System.out.println("[Registry] Available Models: " + connectData.getAvailableModels().size() + " total");
+        }
+
+        if (connectData.getDiskPartitions() != null) {
+            System.out.println("[Registry] Partitions: " + connectData.getDiskPartitions());
+        }
 
         return ResponseEntity.ok("Connexion enregistrée avec succès.");
     }
 
+    // owo --------------------------------------------------------------------- owo //
+    // owo ------------------------- connect API-------------------------------- owo //
+    // owo --------------------------------------------------------------------- owo //
+
+
     @PostMapping("/api/hello")
     public ResponseEntity<String> handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
 
+        String agentId = agentData.getIdAgent();
         String completedTaskId = agentData.getTaskId();
         String agentResult = agentData.getResult();
-        String agentStatus = agentData.getStatus();
+        //String agentStatus = agentData.getStatus();
 
         System.out.println("--- Incoming Sync from Agent ---");
-        System.out.println("[Server] Agent Status: " + agentStatus);
 
-        // 1. Process completed task result from agent if present
+        // Guard Clause: Ensure agentId is present
+        if (agentId == null || agentId.trim().isEmpty()) {
+            System.err.println("[Gateway] Rejecting sync: Missing idAgent in request payload.");
+            return ResponseEntity.badRequest().body("ERROR_MISSING_ID_AGENT");
+        }
+
+        System.out.println("[Server] Agent ID: " + agentId );
+
+        // 1. Process completed task result if delivered by agent
         if (agentResult != null && completedTaskId != null) {
-            System.out.println("[Gateway] Agent delivered result for Task " + completedTaskId);
+            System.out.println("[Gateway] Agent [" + agentId + "] delivered result for Task: " + completedTaskId);
             System.out.println("[Gateway] Result content: " + agentResult);
             resultsMap.put(completedTaskId, agentResult);
         }
 
-        // Look up stored hardware details from the registry using pc_id
-        AgentConnectRequest hardwareProfile = agentHardwareRegistry.get(agentData.getAgentId());
+        // 2. Look up stored hardware profile from registry using idAgent
+        AgentConnectRequest hardwareProfile = agentHardwareRegistry.get(agentId);
 
-        // checks if the agent connected before or not
         if (hardwareProfile != null) {
-            System.out.println("[Gateway] Agent checked in (" + agentData.getAgentId() + "). " +
-                    "VRAM Available: " + hardwareProfile.getVramAvailable() + " bytes");
+            System.out.println("[Gateway] Agent checked in (" + agentId + "). " +
+                    "VRAM: " + hardwareProfile.getVram() + " MB | CPU Load: " + hardwareProfile.getCpu() + "%");
         } else {
-            System.out.println("[Gateway] Warning: Unregistered agent checked in: " + agentData.getAgentId());
+            System.out.println("[Gateway] Warning: Unregistered agent checked in: " + agentId);
         }
 
-        // 2. LONG POLLING WAIT LOOP (Wait up to 30s for a task in the queue) only if there is no queue is empty
+        // 3. LONG POLLING WAIT LOOP (Wait up to 30s for a task in the queue)
         int serverWaitCounter = 0;
         while (taskQueue.isEmpty() && serverWaitCounter < 30) {
             Thread.sleep(1000);
             serverWaitCounter++;
         }
 
-        // 3. Dispatch task or return timeout signal
+        // 4. Dispatch task or return timeout signal
         AgentTask nextTask = taskQueue.poll();
 
         if (nextTask != null) {
-            System.out.println("[Server] Dispatching task [" + nextTask.id + "] to Agent: " + nextTask.prompt);
-            // Returns "taskId|||prompt" string as expected by your current setup
+            System.out.println("[Server] Dispatching task [" + nextTask.id + "] to Agent (" + agentId + "): " + nextTask.prompt);
+            // Returns "taskId|||prompt" string as expected by client simulator
             return ResponseEntity.ok(nextTask.id + "|||" + nextTask.prompt);
         } else {
-            System.out.println("[Server] Long poll timed out. Waiting list is empty.");
+            System.out.println("[Server] Long poll timed out for Agent (" + agentId + "). Queue empty.");
             return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
         }
     }

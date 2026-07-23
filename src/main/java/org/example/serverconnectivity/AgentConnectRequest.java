@@ -1,51 +1,111 @@
 package org.example.serverconnectivity;
+import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class AgentConnectRequest {
 
-    @JsonProperty("pc_id")
-    private String pcId;
+    // never changes
+    private String idAgent;
 
-    // does not need annotation because it matches by default since they are defined the same
-    private String status;
+    public String getIdAgent() {
+        return idAgent;
+    }
 
-    @JsonProperty("total_vram_capacity")
-    private Long totalVramCapacity;
+    public void setIdAgent(String idAgent) {
+        this.idAgent = idAgent;
+    }
 
-    @JsonProperty("vram_available")
-    private Long vramAvailable;
+    public long getVram() {
+        return vram;
+    }
 
-    @JsonProperty("cpu_cores")
-    private Integer cpuCores;
+    public void setVram(long vram) {
+        this.vram = vram;
+    }
 
-    @JsonProperty("free_disk_space_bytes")
-    private Long freeDiskSpaceBytes;
+    public float getCpu() {
+        return cpu;
+    }
 
-    @JsonProperty("total_disk_space_bytes")
-    private Long totalDiskSpaceBytes;
+    public void setCpu(float cpu) {
+        this.cpu = cpu;
+    }
+
+    public float getGpu() {
+        return gpu;
+    }
+
+    public void setGpu(float gpu) {
+        this.gpu = gpu;
+    }
+
+    public List<String> getModelsInVRAM() {
+        return modelsInVRAM;
+    }
+
+    public void setModelsInVRAM(List<String> modelsInVRAM) {
+        this.modelsInVRAM = modelsInVRAM;
+    }
+
+    public float getDiskUsage() {
+        return diskUsage;
+    }
+
+    public void setDiskUsage(float diskUsage) {
+        this.diskUsage = diskUsage;
+    }
+
+    public float getMaxGpu() {
+        return maxGpu;
+    }
+
+    public void setMaxGpu(float maxGpu) {
+        this.maxGpu = maxGpu;
+    }
+
+    public float getMaxCpu() {
+        return maxCpu;
+    }
+
+    public void setMaxCpu(float maxCpu) {
+        this.maxCpu = maxCpu;
+    }
+
+    public List<String> getAvailableModels() {
+        return availableModels;
+    }
+
+    public void setAvailableModels(List<String> availableModels) {
+        this.availableModels = availableModels;
+    }
+
+    public Map<String, Long> getDiskPartitions() {
+        return diskPartitions;
+    }
+
+    public void setDiskPartitions(Map<String, Long> diskPartitions) {
+        this.diskPartitions = diskPartitions;
+    }
+
+    // always changes
+    private long vram;
+    private float cpu;
+    private float gpu;
+    private List<String> modelsInVRAM;
+    private float diskUsage;
+
+    // rarely changes
+    private float maxGpu;
+    private float maxCpu;
+    private List<String> availableModels;
+    private Map<String, Long> diskPartitions; // Key: Partition (e.g. "C:"), Value: Size in MB
+
+
+
+
 
     public AgentConnectRequest() {}
 
-    // Getters and Setters
-    public String getPcId() { return pcId; }
-    public void setPcId(String pcId) { this.pcId = pcId; }
-
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public Long getTotalVramCapacity() { return totalVramCapacity; }
-    public void setTotalVramCapacity(Long totalVramCapacity) { this.totalVramCapacity = totalVramCapacity; }
-
-    public Long getVramAvailable() { return vramAvailable; }
-    public void setVramAvailable(Long vramAvailable) { this.vramAvailable = vramAvailable; }
-
-    public Integer getCpuCores() { return cpuCores; }
-    public void setCpuCores(Integer cpuCores) { this.cpuCores = cpuCores; }
-
-    public Long getFreeDiskSpaceBytes() { return freeDiskSpaceBytes; }
-    public void setFreeDiskSpaceBytes(Long freeDiskSpaceBytes) { this.freeDiskSpaceBytes = freeDiskSpaceBytes; }
-
-    public Long getTotalDiskSpaceBytes() { return totalDiskSpaceBytes; }
-    public void setTotalDiskSpaceBytes(Long totalDiskSpaceBytes) { this.totalDiskSpaceBytes = totalDiskSpaceBytes; }
 }
