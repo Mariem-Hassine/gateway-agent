@@ -3,6 +3,8 @@ package org.example.serverconnectivity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -26,6 +28,8 @@ public class ApiController {
 
     // Map to hold raw agent hardware metrics sent during initial connection from api/connect
     private final ConcurrentHashMap<String, AgentConnectRequest> agentHardwareRegistry = new ConcurrentHashMap<>();
+    // Map linking connectionId -> AgentConnectRequest profile
+    private final ConcurrentHashMap<String, AgentConnectRequest> activeSessions = new ConcurrentHashMap<>();
     //
     //private final ConcurrentHashMap<String, AgentSession> agentRegistry = new ConcurrentHashMap<>();
    // used before for init connectivity test , useless for now just kept for vibes
@@ -62,13 +66,19 @@ public class ApiController {
     // owo --------------------------------------------------------------------- owo //
 
     @PostMapping("/api/connect")
-    public ResponseEntity<String> handleAgentConnect(@RequestBody AgentConnectRequest connectData) {
+    public ResponseEntity<Map<String, String>> handleAgentConnect(@RequestBody AgentConnectRequest connectData) {
         if (connectData.getIdAgent() == null || connectData.getIdAgent().trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Invalid Request: idAgent missing.");
+            return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Invalid Request: idAgent missing."));
         }
+        String connectionId = "CONN-BWAHAHAHA";
 
-        // 2. Store agent specs in registry using idAgent
+        // store agent specs in registry using idAgent
+        // btw the connectData has agentId so this registory have the id in the key and the value
+        // but idk unless there will be a probleme
+
         agentHardwareRegistry.put(connectData.getIdAgent(), connectData);
+        // store the active sessions
+        activeSessions.put(connectionId, connectData);
 
         // 3. Log updated specs with new attributes and collection formats
         System.out.println("=== AGENT REGISTERED (/api/connect) ===");
@@ -90,8 +100,12 @@ public class ApiController {
         if (connectData.getDiskPartitions() != null) {
             System.out.println("[Registry] Partitions: " + connectData.getDiskPartitions());
         }
+        Map<String, String> responseBody = new HashMap<>();
+        responseBody.put("status", "ok");
+        responseBody.put("connectionId", connectionId);
 
-        return ResponseEntity.ok("Connexion enregistrée avec succès.");
+        // Fixed: Returning responseBody map so Spring converts it to JSON!
+        return ResponseEntity.ok(responseBody);
     }
 
     // owo --------------------------------------------------------------------- owo //
@@ -99,30 +113,49 @@ public class ApiController {
     // owo --------------------------------------------------------------------- owo //
 
 
-    @PostMapping("/api/hello")
+    @PostMapping("/api/continue")
     public ResponseEntity<String> handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
+        String connectionId = agentData.getConnectionId();
 
-        String agentId = agentData.getIdAgent();
-        String completedTaskId = agentData.getTaskId();
-        String agentResult = agentData.getResult();
+        // validate that the conx id exist in registred connections
+        if (connectionId == null || !activeSessions.containsKey(connectionId)) {
+            System.err.println("[Gateway] Rejecting sync: Invalid or unassigned connectionId [" + connectionId + "].");
+            return ResponseEntity.status(401).body("ERROR_INVALID_CONNECTION_ID");
+        }
+        AgentConnectRequest sessionData = activeSessions.get(connectionId);
+        if (agentData.getCpu() != null) sessionData.setCpu(agentData.getCpu());
+        if (agentData.getGpu() != null) sessionData.setGpu(agentData.getGpu());
+        if (agentData.getVram() != null) sessionData.setVram(agentData.getVram());
+        if (agentData.getDiskUsage() != null) sessionData.setDiskUsage(agentData.getDiskUsage());
+        if (agentData.getModelsInVRAM() != null) sessionData.setModelsInVRAM(agentData.getModelsInVRAM());
+
+
+        //String completedTaskId = agentData.getTaskId();
+        //String agentResult = agentData.getResult();
         //String agentStatus = agentData.getStatus();
 
         System.out.println("--- Incoming Sync from Agent ---");
+        System.out.println("[Gateway] Sync received from Connection [" + connectionId + "] " +
+                "\nAgent: " + sessionData.getIdAgent() + "\nCPU: " + sessionData.getCpu() + "% \nGPU: " + sessionData.getGpu() + "%)");
 
-        // Guard Clause: Ensure agentId is present
-        if (agentId == null || agentId.trim().isEmpty()) {
-            System.err.println("[Gateway] Rejecting sync: Missing idAgent in request payload.");
-            return ResponseEntity.badRequest().body("ERROR_MISSING_ID_AGENT");
+        // when we receive a prompt response from the agent
+        if (agentData.getTaskId() != null && agentData.getResult() != null) {
+            System.out.println("[Gateway] Task result delivered for Task: " + agentData.getTaskId());
+            resultsMap.put(agentData.getTaskId(), agentData.getResult());
         }
 
-        System.out.println("[Server] Agent ID: " + agentId );
 
+
+/*
         // 1. Process completed task result if delivered by agent
         if (agentResult != null && completedTaskId != null) {
             System.out.println("[Gateway] Agent [" + agentId + "] delivered result for Task: " + completedTaskId);
             System.out.println("[Gateway] Result content: " + agentResult);
             resultsMap.put(completedTaskId, agentResult);
         }
+
+
+
 
         // 2. Look up stored hardware profile from registry using idAgent
         AgentConnectRequest hardwareProfile = agentHardwareRegistry.get(agentId);
@@ -134,6 +167,7 @@ public class ApiController {
             System.out.println("[Gateway] Warning: Unregistered agent checked in: " + agentId);
         }
 
+*/
         // 3. LONG POLLING WAIT LOOP (Wait up to 30s for a task in the queue)
         int serverWaitCounter = 0;
         while (taskQueue.isEmpty() && serverWaitCounter < 30) {
@@ -145,11 +179,11 @@ public class ApiController {
         AgentTask nextTask = taskQueue.poll();
 
         if (nextTask != null) {
-            System.out.println("[Server] Dispatching task [" + nextTask.id + "] to Agent (" + agentId + "): " + nextTask.prompt);
+            System.out.println("[Server] Dispatching task [" + nextTask.id + "] to Agent (" + connectionId + "): " + nextTask.prompt);
             // Returns "taskId|||prompt" string as expected by client simulator
             return ResponseEntity.ok(nextTask.id + "|||" + nextTask.prompt);
         } else {
-            System.out.println("[Server] Long poll timed out for Agent (" + agentId + "). Queue empty.");
+            System.out.println("[Server] Long poll timed out for Agent (" + connectionId + "). Queue empty.");
             return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
         }
     }

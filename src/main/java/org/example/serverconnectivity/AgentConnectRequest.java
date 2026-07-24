@@ -25,19 +25,19 @@ public class AgentConnectRequest {
         this.vram = vram;
     }
 
-    public float getCpu() {
+    public Double getCpu() {
         return cpu;
     }
 
-    public void setCpu(float cpu) {
+    public void setCpu(Double cpu) {
         this.cpu = cpu;
     }
 
-    public float getGpu() {
+    public Double getGpu() {
         return gpu;
     }
 
-    public void setGpu(float gpu) {
+    public void setGpu(Double gpu) {
         this.gpu = gpu;
     }
 
@@ -49,27 +49,27 @@ public class AgentConnectRequest {
         this.modelsInVRAM = modelsInVRAM;
     }
 
-    public float getDiskUsage() {
+    public Double getDiskUsage() {
         return diskUsage;
     }
 
-    public void setDiskUsage(float diskUsage) {
+    public void setDiskUsage(Double diskUsage) {
         this.diskUsage = diskUsage;
     }
 
-    public float getMaxGpu() {
+    public Double getMaxGpu() {
         return maxGpu;
     }
 
-    public void setMaxGpu(float maxGpu) {
+    public void setMaxGpu(Double maxGpu) {
         this.maxGpu = maxGpu;
     }
 
-    public float getMaxCpu() {
+    public Double getMaxCpu() {
         return maxCpu;
     }
 
-    public void setMaxCpu(float maxCpu) {
+    public void setMaxCpu(Double maxCpu) {
         this.maxCpu = maxCpu;
     }
 
@@ -91,14 +91,14 @@ public class AgentConnectRequest {
 
     // always changes
     private long vram;
-    private float cpu;
-    private float gpu;
+    private Double cpu;
+    private Double gpu;
     private List<String> modelsInVRAM;
-    private float diskUsage;
+    private Double diskUsage;
 
     // rarely changes
-    private float maxGpu;
-    private float maxCpu;
+    private Double maxGpu;
+    private Double maxCpu;
     private List<String> availableModels;
     private Map<String, Long> diskPartitions; // Key: Partition (e.g. "C:"), Value: Size in MB
 
