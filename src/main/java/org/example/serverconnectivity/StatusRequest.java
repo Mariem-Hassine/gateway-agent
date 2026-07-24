@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Map;
 
 public class StatusRequest {
     public String getConnectionId() {
@@ -100,9 +101,9 @@ public class StatusRequest {
     //private String status;
     private String connectionId;
     private String result;
-    @JsonProperty("task_id")
+   // @JsonProperty("task_id")
     private String taskId;// Added to match the Agent's loop data
-    @JsonAlias({"agentId", "pc_id", "agent_id", "pcId","idAgent"})
+    //@JsonAlias({"agentId", "pc_id", "agent_id", "pcId","idAgent"})
     private Integer vram;
     private Double cpu;
     private Double maxCpu;
@@ -111,4 +112,14 @@ public class StatusRequest {
     private Double diskUsage;
     private List<String> modelsInVRAM;
     private List<String> availableModels;
+
+    public Map<String, Long> getDiskPartitions() {
+        return diskPartitions;
+    }
+
+    public void setDiskPartitions(Map<String, Long> diskPartitions) {
+        this.diskPartitions = diskPartitions;
+    }
+
+    private Map<String, Long> diskPartitions;
 }

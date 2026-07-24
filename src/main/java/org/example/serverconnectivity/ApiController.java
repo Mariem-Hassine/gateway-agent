@@ -30,7 +30,9 @@ public class ApiController {
     private final ConcurrentHashMap<String, AgentConnectRequest> agentHardwareRegistry = new ConcurrentHashMap<>();
     // Map linking connectionId -> AgentConnectRequest profile
     private final ConcurrentHashMap<String, AgentConnectRequest> activeSessions = new ConcurrentHashMap<>();
-    //
+
+
+    private final Map<String, Boolean> needsFullSync = new ConcurrentHashMap<>();
     //private final ConcurrentHashMap<String, AgentSession> agentRegistry = new ConcurrentHashMap<>();
    // used before for init connectivity test , useless for now just kept for vibes
     @GetMapping("/api/hello")
@@ -113,21 +115,64 @@ public class ApiController {
     // owo --------------------------------------------------------------------- owo //
 
 
+
+
+    // owo --------------------------------------------------------------------- owo //
+    // owo ------------------------ continue API ------------------------------- owo //
+    // owo --------------------------------------------------------------------- owo //
+
     @PostMapping("/api/continue")
     public ResponseEntity<String> handleAgentSync(@RequestBody StatusRequest agentData) throws InterruptedException {
         String connectionId = agentData.getConnectionId();
+
 
         // validate that the conx id exist in registred connections
         if (connectionId == null || !activeSessions.containsKey(connectionId)) {
             System.err.println("[Gateway] Rejecting sync: Invalid or unassigned connectionId [" + connectionId + "].");
             return ResponseEntity.status(401).body("ERROR_INVALID_CONNECTION_ID");
         }
+
+
         AgentConnectRequest sessionData = activeSessions.get(connectionId);
+
+
         if (agentData.getCpu() != null) sessionData.setCpu(agentData.getCpu());
         if (agentData.getGpu() != null) sessionData.setGpu(agentData.getGpu());
         if (agentData.getVram() != null) sessionData.setVram(agentData.getVram());
         if (agentData.getDiskUsage() != null) sessionData.setDiskUsage(agentData.getDiskUsage());
         if (agentData.getModelsInVRAM() != null) sessionData.setModelsInVRAM(agentData.getModelsInVRAM());
+
+
+
+        // checks if the invalidate flag has be raised
+        if (Boolean.TRUE.equals(needsFullSync.get(connectionId))) {
+            System.out.println("\n=== REFRESHING AGENT CHARACTERISTICS (/api/continue) ===");
+            System.out.println("[Gateway] will make an update or smth idk " );
+            if (agentData.getAvailableModels() != null) {
+                sessionData.setAvailableModels(agentData.getAvailableModels());
+                System.out.println("[Gateway] Updated Available Models (" + agentData.getAvailableModels().size() + " total): " + agentData.getAvailableModels());
+            }
+            if (agentData.getMaxCpu() != null) {
+                sessionData.setMaxCpu(agentData.getMaxCpu());
+                System.out.println("[Gateway] Updated Max CPU: " + agentData.getMaxCpu() + "%");
+            }
+            if (agentData.getMaxGpu() != null) {
+                sessionData.setMaxGpu(agentData.getMaxGpu());
+                System.out.println("[Gateway] Updated Max GPU: " + agentData.getMaxGpu() + "%");
+            }
+            if (agentData.getDiskPartitions() != null) {
+                sessionData.setDiskPartitions(agentData.getDiskPartitions());
+                System.out.println("[Gateway] Updated Disk Partitions: " + agentData.getDiskPartitions());
+            }
+
+            // Sync changes back to hardware registry
+            agentHardwareRegistry.put(sessionData.getIdAgent(), sessionData);
+
+            // Reset full sync flag
+            needsFullSync.remove(connectionId);
+            System.out.println("[Gateway] Full characteristics refresh completed successfully.\n");
+
+        }
 
 
         //String completedTaskId = agentData.getTaskId();
@@ -187,5 +232,28 @@ public class ApiController {
             return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
         }
     }
+    // owo --------------------------------------------------------------------- owo //
+    // owo ----------------------- invalidate API ------------------------------ owo //
+    // owo --------------------------------------------------------------------- owo //
+
+    @PostMapping("/api/invalidate")
+    public ResponseEntity<Map<String, String>> handleAgentInvalidate(@RequestBody Map<String, String> request) {
+        String connectionId = request.get("connectionId");
+
+        // 1. Validate that the connection ID exists in active sessions
+        if (connectionId == null || !activeSessions.containsKey(connectionId)) {
+            System.err.println("[Gateway] Rejecting invalidation: Invalid or unassigned connectionId [" + connectionId + "].");
+            return ResponseEntity.status(401).body(Map.of("status", "error", "message", "ERROR_INVALID_CONNECTION_ID"));
+        }
+        // get the agent id through the conx id from the active sessions map
+        String agentId = activeSessions.get(connectionId).getIdAgent();
+
+        // logging the notification event
+        System.out.println("=== AGENT STATE INVALIDATED NOTIFICATION (/api/invalidate) ===");
+        System.out.println("[Gateway] Invalidation event received for Connection [" + connectionId + "] (Agent: " + agentId + ").");
+
+        // sends a notification to the agent to ack the invalidation
+        return ResponseEntity.ok(Map.of("status", "ACKNOWLEDGED"));    }
+
 }
 
