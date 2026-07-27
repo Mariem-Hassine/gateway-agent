@@ -1,0 +1,91 @@
+paths:
+  /api/continue:
+    post:
+      summary: Long-Poll and Status Sync
+      description: Called continuously by agents to deliver dynamic load metrics, task results, and optional spec updates while long-polling for new tasks.
+      operationId: handleAgentSync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusRequest'
+      responses:
+        '200':
+          description: Returns dispatched task string in format "taskId|||prompt" or "WAIT_NO_TASKS_AVAILABLE".
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "550e8400-e29b-41d4-a716-446655440000|||Hello, summarize this text"
+        '401':
+          description: Rejecting sync due to missing or invalid connection ID.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ERROR_INVALID_CONNECTION_ID"
+
+components:
+  schemas:
+    StatusRequest:
+      type: object
+      required:
+        - connectionId
+      properties:
+        connectionId:
+          type: string
+          example: "CONN-A1B2C3D4"
+        status:
+          type: string
+          example: "connected"
+        cpu:
+          type: number
+          format: float
+          example: 25.0
+        gpu:
+          type: number
+          format: float
+          example: 50.0
+        vram:
+          type: integer
+          format: int64
+          example: 8192
+        diskUsage:
+          type: number
+          format: float
+          example: 60.0
+        modelsInVRAM:
+          type: array
+          items:
+            type: string
+          example: ["llama3:8b"]
+        taskId:
+          type: string
+          nullable: true
+          example: "7030f408-94ea-4f19-8f7a-15f0ad901b5d"
+        result:
+          type: string
+          nullable: true
+          example: "Task completed successfully"
+        availableModels:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ["llama3:8b", "codellama:7b", "mixtral:8b"]
+        maxCpu:
+          type: number
+          format: float
+          nullable: true
+          example: 100.0
+        maxGpu:
+          type: number
+          format: float
+          nullable: true
+          example: 120.0
+        diskPartitions:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64

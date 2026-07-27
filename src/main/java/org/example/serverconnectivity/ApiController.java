@@ -255,5 +255,10 @@ public class ApiController {
         // sends a notification to the agent to ack the invalidation
         return ResponseEntity.ok(Map.of("status", "ACKNOWLEDGED"));    }
 
+    // owo --------------------------------------------------------------------- owo //
+    // owo ----------------------- invalidate API ------------------------------ owo //
+    // owo --------------------------------------------------------------------- owo //
+
+
 }
 
