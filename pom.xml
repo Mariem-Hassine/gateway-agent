@@ -55,6 +55,18 @@
             <version>1.0.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jms</artifactId>
+        </dependency>
+
+        <!-- RabbitMQ JMS Adapter (Translates JMS calls to RabbitMQ AMQP) -->
+        <dependency>
+            <groupId>com.rabbitmq.jms</groupId>
+            <artifactId>rabbitmq-jms</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
 
     </dependencies>
 

@@ -6,21 +6,29 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
 @CrossOrigin(origins = "*")
 @RestController
 public class ApiController {
+    private final TaskDispatchService taskDispatchService;
+
+    // Registries for Agent Metrics and Active Sessions
+
+    private final Map<String, Boolean> needsFullSync = new ConcurrentHashMap<>();
 
     // all maps :
     // one for received tasks
     // one for results sent from the agent waiting to get set
     // one agent's data
 
-    // list for the received tasks form the user
+    // list for the received tasks form the user :  OLD CODE
     private final ConcurrentLinkedQueue<AgentTask> taskQueue = new ConcurrentLinkedQueue<>();
     // map tracking results for each unique task ID (ID -> Result String) that we get from the agent
+    // OLD CODE
     private final ConcurrentHashMap<String, String> resultsMap = new ConcurrentHashMap<>();
 
     // to save the agents (may delete later idk)
@@ -32,36 +40,40 @@ public class ApiController {
     private final ConcurrentHashMap<String, AgentConnectRequest> activeSessions = new ConcurrentHashMap<>();
 
 
-    private final Map<String, Boolean> needsFullSync = new ConcurrentHashMap<>();
+
+
+    public ApiController(TaskDispatchService taskDispatchService) {
+        this.taskDispatchService = taskDispatchService;
+    }
+
     //private final ConcurrentHashMap<String, AgentSession> agentRegistry = new ConcurrentHashMap<>();
    // used before for init connectivity test , useless for now just kept for vibes
     @GetMapping("/api/hello")
     public String sayHello(@RequestParam(value = "name", defaultValue = "World") String name) {
         return String.format("Hello, %s! Your HTTP request successfully reached my TCP port!", name);
     }
+
+    // owo --------------------------------------------------------------------- owo //
+    // owo ------------------------ user query API------------------------------ owo //
+    // owo --------------------------------------------------------------------- owo //
     // receive the queries from the user
     @PostMapping("/api/ask")
-    public String receiveUserQuery(@RequestBody String query) throws InterruptedException{
+    public CompletableFuture<ResponseEntity<String>> receiveUserQuery(@RequestBody String query) throws InterruptedException{
 
         System.out.println("[Gateway] Received query from User: " + query);
-        // assign random long ahh id to the query
-        String taskId = UUID.randomUUID().toString();
 
-        // Add to queue and initialize the map with a pending status
-        taskQueue.add(new AgentTask(taskId, query));
-        resultsMap.put(taskId, "En attente de traitement...");
 
-        // Wait only for THIS specific task ID's result to change ( this is for mono agent )
-        int timeoutCounter = 0;
-        while (resultsMap.get(taskId).equals("En attente de traitement...") && timeoutCounter < 30) {
-            Thread.sleep(6000);
-            timeoutCounter++;
-        }
-
-        // Retrieve the result, clean up the map, and return it to the user
-        String finalResult = resultsMap.remove(taskId);
-        return finalResult != null ? finalResult : "Request timed out."; // in case of a timeout we send a msg indicating so
+        // Submit prompt to JMS Queue and handle asynchronous completion
+        return taskDispatchService.submitUserQuery(query)
+                .orTimeout(60, TimeUnit.SECONDS) // Return 504 if no agent responds within 60s
+                .thenApply(ResponseEntity::ok)
+                .exceptionally(ex -> ResponseEntity.status(504).body("Request timed out waiting for an agent."));
     }
+    // owo --------------------------------------------------------------------- owo //
+    // owo ------------------------ user query API------------------------------ owo //
+    // owo --------------------------------------------------------------------- owo //
+
+
 
     // owo --------------------------------------------------------------------- owo //
     // owo ------------------------- connect API-------------------------------- owo //
@@ -72,7 +84,8 @@ public class ApiController {
         if (connectData.getIdAgent() == null || connectData.getIdAgent().trim().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Invalid Request: idAgent missing."));
         }
-        String connectionId = "CONN-BWAHAHAHA";
+        String connectionId = "CONN-" + connectData.getIdAgent(); // keeping it simple for no
+        // TODO replace this with a token ya ta3 cyber ya kali linux
 
         // store agent specs in registry using idAgent
         // btw the connectData has agentId so this registory have the id in the key and the value
@@ -174,68 +187,22 @@ public class ApiController {
 
         }
 
-
-        //String completedTaskId = agentData.getTaskId();
-        //String agentResult = agentData.getResult();
-        //String agentStatus = agentData.getStatus();
-
         System.out.println("--- Incoming Sync from Agent ---");
         System.out.println("[Gateway] Sync received from Connection [" + connectionId + "] " +
                 "\nAgent: " + sessionData.getIdAgent() + "\nCPU: " + sessionData.getCpu() + "% \nGPU: " + sessionData.getGpu() + "%)");
 
-        // when we receive a prompt response from the agent
-        if (agentData.getTaskId() != null && agentData.getResult() != null) {
-            System.out.println("[Gateway] Task result delivered for Task: " + agentData.getTaskId());
-            resultsMap.put(agentData.getTaskId(), agentData.getResult());
-        }
-
-
-
-/*
-        // 1. Process completed task result if delivered by agent
-        if (agentResult != null && completedTaskId != null) {
-            System.out.println("[Gateway] Agent [" + agentId + "] delivered result for Task: " + completedTaskId);
-            System.out.println("[Gateway] Result content: " + agentResult);
-            resultsMap.put(completedTaskId, agentResult);
-        }
 
 
 
 
-        // 2. Look up stored hardware profile from registry using idAgent
-        AgentConnectRequest hardwareProfile = agentHardwareRegistry.get(agentId);
+        System.out.println("[Gateway] Sync acknowledged for Agent [" + sessionData.getIdAgent() + "]");
 
-        if (hardwareProfile != null) {
-            System.out.println("[Gateway] Agent checked in (" + agentId + "). " +
-                    "VRAM: " + hardwareProfile.getVram() + " MB | CPU Load: " + hardwareProfile.getCpu() + "%");
-        } else {
-            System.out.println("[Gateway] Warning: Unregistered agent checked in: " + agentId);
-        }
-
-*/
-        // 3. LONG POLLING WAIT LOOP (Wait up to 30s for a task in the queue)
-        int serverWaitCounter = 0;
-        while (taskQueue.isEmpty() && serverWaitCounter < 30) {
-            Thread.sleep(1000);
-            serverWaitCounter++;
-        }
-
-        // 4. Dispatch task or return timeout signal
-        AgentTask nextTask = taskQueue.poll();
-
-        if (nextTask != null) {
-            System.out.println("[Server] Dispatching task [" + nextTask.id + "] to Agent (" + connectionId + "): " + nextTask.prompt);
-            // Returns "taskId|||prompt" string as expected by client simulator
-            return ResponseEntity.ok(nextTask.id + "|||" + nextTask.prompt);
-        } else {
-            System.out.println("[Server] Long poll timed out for Agent (" + connectionId + "). Queue empty.");
-            return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
-        }
+        // Return instant response — tasks are received asynchronously via RabbitMQ/JMS
+        return ResponseEntity.ok("SYNC_ACKNOWLEDGED");
     }
     // owo --------------------------------------------------------------------- owo //
     // owo ----------------------- invalidate API ------------------------------ owo //
     // owo --------------------------------------------------------------------- owo //
-
     @PostMapping("/api/invalidate")
     public ResponseEntity<Map<String, String>> handleAgentInvalidate(@RequestBody Map<String, String> request) {
         String connectionId = request.get("connectionId");
@@ -247,6 +214,7 @@ public class ApiController {
         }
         // get the agent id through the conx id from the active sessions map
         String agentId = activeSessions.get(connectionId).getIdAgent();
+        needsFullSync.put(connectionId, true);
 
         // logging the notification event
         System.out.println("=== AGENT STATE INVALIDATED NOTIFICATION (/api/invalidate) ===");
@@ -254,6 +222,26 @@ public class ApiController {
 
         // sends a notification to the agent to ack the invalidation
         return ResponseEntity.ok(Map.of("status", "ACKNOWLEDGED"));    }
+
+  /*  @PostMapping("/api/invalidate")
+    public ResponseEntity<Map<String, String>> handleAgentInvalidate(@RequestBody Map<String, String> request) {
+        String connectionId = request.get("connectionId");
+
+        // 1. Validate that the connection ID exists in active sessions
+        if (connectionId == null || !activeSessions.containsKey(connectionId)) {
+            System.err.println("[Gateway] Rejecting invalidation: Invalid or unassigned connectionId [" + connectionId + "].");
+            return ResponseEntity.status(401).body(Map.of("status", "error", "message", "ERROR_INVALID_CONNECTION_ID"));
+        }
+        // get the agent id through the conx id from the active sessions map
+        String agentId = activeSessions.get(connectionId).getIdAgent();
+        needsFullSync.put(connectionId, true);
+
+        // logging the notification event
+        System.out.println("=== AGENT STATE INVALIDATED NOTIFICATION (/api/invalidate) ===");
+        System.out.println("[Gateway] Invalidation event received for Connection [" + connectionId + "] (Agent: " + agentId + ").");
+
+        // sends a notification to the agent to ack the invalidation
+        return ResponseEntity.ok(Map.of("status", "ACKNOWLEDGED"));    }*/
 
     // owo --------------------------------------------------------------------- owo //
     // owo ----------------------- invalidate API ------------------------------ owo //
