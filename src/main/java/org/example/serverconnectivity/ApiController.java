@@ -68,7 +68,7 @@ public class ApiController {
 
         // Submit prompt to JMS Queue and handle asynchronous completion
         return taskDispatchService.submitUserQuery(query)
-                .orTimeout(60, TimeUnit.SECONDS) // Return 504 if no agent responds within 60s
+                .orTimeout(180, TimeUnit.SECONDS) // Return 504 if no agent responds within 60s
                 .thenApply(ResponseEntity::ok)
                 .exceptionally(ex -> ResponseEntity.status(504).body("Request timed out waiting for an agent."));
     }
@@ -154,7 +154,7 @@ public class ApiController {
 
         if (agentData.getCpu() != null) sessionData.setCpu(agentData.getCpu());
         if (agentData.getGpu() != null) sessionData.setGpu(agentData.getGpu());
-        if (agentData.getVram() != null) sessionData.setVram(agentData.getVram());
+        if (agentData.getVram() != 0L) sessionData.setVram(agentData.getVram());
         if (agentData.getDiskUsage() != null) sessionData.setDiskUsage(agentData.getDiskUsage());
         if (agentData.getModelsInVRAM() != null) sessionData.setModelsInVRAM(agentData.getModelsInVRAM());
 

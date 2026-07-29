@@ -17,11 +17,11 @@ public class AgentConnectRequest {
         this.idAgent = idAgent;
     }
 
-    public long getVram() {
+    public Long getVram() {
         return vram;
     }
 
-    public void setVram(long vram) {
+    public void setVram(Long vram) {
         this.vram = vram;
     }
 
@@ -90,7 +90,7 @@ public class AgentConnectRequest {
     }
 
     // always changes
-    private long vram;
+    private Long vram;
     private Double cpu;
     private Double gpu;
     private List<String> modelsInVRAM;

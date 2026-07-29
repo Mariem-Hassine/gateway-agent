@@ -43,7 +43,7 @@ public class TaskDispatchService {
     // --------------------------------------------------------------------- //
 
     public String pollNextTask() {
-        jmsTemplate.setReceiveTimeout(200L); // 200ms non-blocking check
+        jmsTemplate.setReceiveTimeout(180000L); // 200ms non-blocking check
         jakarta.jms.Message message = jmsTemplate.receive("task.dispatch.queue");
 
         if (message instanceof TextMessage textMessage) {

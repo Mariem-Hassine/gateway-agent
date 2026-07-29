@@ -34,7 +34,7 @@ public class StatusRequest {
         this.taskId = taskId;
     }
 
-    public Integer getVram() {
+    public long getVram() {
         return vram;
     }
 
@@ -104,7 +104,7 @@ public class StatusRequest {
    // @JsonProperty("task_id")
     private String taskId;// Added to match the Agent's loop data
     //@JsonAlias({"agentId", "pc_id", "agent_id", "pcId","idAgent"})
-    private Integer vram;
+    private long vram;
     private Double cpu;
     private Double maxCpu;
     private Double gpu;
