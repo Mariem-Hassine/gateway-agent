@@ -1,5 +1,7 @@
 package org.example.serverconnectivity;
+import org.example.serverconnectivity.TaskDispatchService.*;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,7 +16,8 @@ import java.util.concurrent.TimeUnit;
 @CrossOrigin(origins = "*")
 @RestController
 public class ApiController {
-    private final TaskDispatchService taskDispatchService;
+    @Autowired
+    private TaskDispatchService taskDispatchService;
 
     // Registries for Agent Metrics and Active Sessions
 
@@ -197,13 +200,28 @@ public class ApiController {
 
         System.out.println("[Gateway] Sync acknowledged for Agent [" + sessionData.getIdAgent() + "]");
 
-        // Return instant response — tasks are received asynchronously via RabbitMQ/JMS
-        return ResponseEntity.ok("SYNC_ACKNOWLEDGED");
+        // 2. IF AGENT RETURNED A RESULT, COMPLETE THE USER'S WAITING REQUEST
+        if (agentData.getTaskId() != null && agentData.getResult() != null) {
+            System.out.println("[Gateway] Received result for taskId [" + agentData.getTaskId() + "]");
+            taskDispatchService.completeTask(agentData.getTaskId(), agentData.getResult());
+        }
+
+        // 3. POLL FOR NEXT WAITING TASK IN RABBITMQ
+        String pendingTask = taskDispatchService.pollNextTask();
+
+        if (pendingTask != null) {
+            System.out.println("[Gateway] Delivering task to Agent [" + sessionData.getIdAgent() + "]: " + pendingTask);
+            return ResponseEntity.ok(pendingTask); // Returns "taskId|||prompt"
+        }
+
+        // 4. IF NO TASKS WAITING, RETURN OPENAPI DEFAULT
+        return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
+    }
     }
     // owo --------------------------------------------------------------------- owo //
     // owo ----------------------- invalidate API ------------------------------ owo //
     // owo --------------------------------------------------------------------- owo //
-    @PostMapping("/api/invalidate")
+    /*@PostMapping("/api/invalidate")
     public ResponseEntity<Map<String, String>> handleAgentInvalidate(@RequestBody Map<String, String> request) {
         String connectionId = request.get("connectionId");
 
@@ -222,7 +240,7 @@ public class ApiController {
 
         // sends a notification to the agent to ack the invalidation
         return ResponseEntity.ok(Map.of("status", "ACKNOWLEDGED"));    }
-
+*/
   /*  @PostMapping("/api/invalidate")
     public ResponseEntity<Map<String, String>> handleAgentInvalidate(@RequestBody Map<String, String> request) {
         String connectionId = request.get("connectionId");
@@ -248,5 +266,5 @@ public class ApiController {
     // owo --------------------------------------------------------------------- owo //
 
 
-}
+
 
