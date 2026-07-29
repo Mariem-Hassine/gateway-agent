@@ -1,0 +1,152 @@
+openapi: 3.0.3
+info:
+  title: API de l'Agent Desktop
+  version: 1.0.0
+  description: API exposée par l'agent pour permettre à la Gateway d'interroger ses différents états (Never Changed, Always Changed, Rarely Changed et Status global).
+
+paths:
+  /api/status:
+    post:
+      summary: Récupérer l'état global combiné (Never Changed + RC + AC)
+      description: Permet à la Gateway de récupérer l'ensemble complet des informations de l'agent en un seul appel.
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  idAgent:
+                    type: string
+                    description: Unique identifier of the worker agent.
+                    example: "Simulated-Worker-01"
+                  vram:
+                      type: integer
+                      format: int64
+                      description: Total or available VRAM capacity in MB or Bytes.
+                      example: 8192
+                  cpu:
+                      type: number
+                      format: float
+                      description: Current CPU usage percentage.
+                      example: 45.5
+                  gpu:
+                      type: number
+                      format: float
+                      description: Current GPU usage percentage.
+                      example: 78.2
+                  maxCpu:
+                      type: number
+                      format: float
+                      description: Maximum CPU capacity threshold percentage.
+                      example: 100.0
+                  maxGpu:
+                      type: number
+                      format: float
+                      description: Maximum GPU capacity threshold percentage.
+                      example: 100.0
+                  diskUsage:
+                      type: number
+                      format: float
+                      description: Current total disk usage percentage.
+                      example: 62.4
+                  modelsInVRAM:
+                      type: array
+                      description: List of LLM model tags currently loaded in VRAM.
+                      items:
+                        type: string
+                      example: [ "llama3:8b" ]
+                  availableModels:
+                      type: array
+                      description: List of all LLM models installed on the agent.
+                      items:
+                        type: string
+                      example: [ "llama3:8b", "codellama:7b", "mistral:7b" ]
+                  diskPartitions:
+                      type: object
+                      description: Map of disk partition labels to their size/capacity in MB.
+                      additionalProperties:
+                        type: integer
+                        format: int64
+                      example:
+                        "C:": 420000
+                        "D:": 1024000
+        '405' :
+            description : Méthode non autorisée
+  /api/ok:
+    post:
+      summary: Répondre OK
+      description: Permet de s'assurer de la bonne communication
+      responses:
+          '200':
+            description: Succès
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                      description: etat de l'agent
+                      example: "ok"
+                    connectionId:
+                      type: string
+                      description: Identifiant unique de l'Agent distribuée par la GW
+                      example: "conn-8f3a1b"
+
+          '405':
+            description: Méthode non autorisée
+  /api/prompt:
+    post:
+      summary: demande de traitement d'une tache
+    description: Permet à la Gateway de demander à l'agent d'exécuter une tâche sur son GPU local.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - idPrompt
+              - prompt
+              - nameModel
+            properties:
+              idPrompt:
+                type: string
+                description: Identifiant unique de la tâche/prompt à exécuter
+                example: "c2a931df-7b21-4d32-8e10-912f209e530b"
+              prompt:
+                type: string
+                description: Tâche à exécuter
+                example: "Quelle est la capitale de la France ?"
+              nameModel:
+                type: string
+                description: Le nom du modèle à utiliser
+                example: "qwen2:0.5b"
+    responses:
+      '200':
+        description: Succés
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idPrompt
+                - connectionId
+                - result
+              properties:
+                idPrompt:
+                  type: string
+                  description: Identifiant de la tâche traitée, permet à la Gateway de faire le lien avec la demande initiale
+                  example: "c2a931df-7b21-4d32-8e10-912f209e530b"
+                connectionId:
+                  type: string
+                  description: Identifiant de connexion de l'agent, pour authentifier la réponse
+                  example: "conn-8f3a1b"
+                result:
+                  type: string
+                  description: Résultat de l'exécution du prompt par Ollama
+                  example: "La capitale de la France est Paris."
+      '405':
+        description: Méthode non autorisée

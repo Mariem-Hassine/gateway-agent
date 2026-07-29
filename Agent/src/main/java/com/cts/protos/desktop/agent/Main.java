@@ -1,5 +1,7 @@
-import java.util.List;
-import java.util.Map;
+
+package com.cts.protos.desktop.agent;
+
+import net.thevpc.nuts.Nuts;
 
 public class Main {
     /*public static void main(String[] args)  {
@@ -22,18 +24,17 @@ public class Main {
             e.printStackTrace();
         }
     }*/
-    public static void main(String[] args) throws Exception {
-        Agent agent = new Agent();
-        agent.testExtractionGPU();
+    public static void main(String[] args) {
+        try {
+            // Initialisation obligatoire de l'espace de travail Nuts
+            Nuts.require();
+            Agent agent = new Agent();
+            System.out.println("[Main] Démarrage de l'agent et initialisation...");
+            agent.start();
 
-        // Test extraction données Ollama
-        System.out.println("--- Extraction des modèles locaux ---");
-        List<Map<String, Object>> models = agent.lireOllamaPs();
-        for (Map<String, Object> m : models) {
-            System.out.println("Modèle détecté : " + m.get("name") + " | VRAM: " + m.get("size_vram"));
+        } catch (Exception e) {
+            System.err.println("[Erreur Critique] Le programme principal a rencontré un problème : " + e.getMessage());
+            e.printStackTrace();
         }
+}}
 
-        // Lancer l'agent en mode test
-        agent.start();
-    }
-}

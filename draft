@@ -1,0 +1,38 @@
+    /*public void start() {
+        // 1. Thread producteur : Injecte une tâche de test au lieu d'appeler le réseau
+        Thread producteur = new Thread(() -> {
+            try {
+                // On attend 2 secondes pour laisser le temps d'extraire les modèles
+                Thread.sleep(2000);
+                String tacheTest = "Explique le multithreading en Java avec exemples de code";
+                tasks.put(tacheTest);
+                System.out.println("[TEST] Tâche injectée dans la file : " + tacheTest);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+
+        // 2. Thread consommateur : Appelle Ollama mais NE PAS envoie à la Gateway
+        Thread consommateur = new Thread(() -> {
+            while (true) {
+                try {
+                    String tache = tasks.take();
+                    String resOllama = processeur(tache,"qwen2:0.5b");
+
+                    // IMPORTANT : On affiche le résultat ici au lieu d'appeler sendResToGW
+                    System.out.println("[TEST] Résultat final obtenu : " + resOllama);
+
+                } catch (Exception e) {
+                    System.err.println("Erreur : " + e.getMessage());
+                }
+            }
+        });
+        producteur.start();
+        consommateur.start();
+    }*/
+    Traduis ce texte en anglais professionnel : "Nous avons bien reçu votre demande et nous y répondrons dans les plus brefs délais."
+
+    Rédige un court e-mail de remerciement pour un entretien d'embauche en tant qu'ingénieur logiciel.
+    Explique brièvement le principe de la photosynthèse en 3 points simples.
+
+    Quels sont les principaux avantages d'utiliser une architecture microservices ?
