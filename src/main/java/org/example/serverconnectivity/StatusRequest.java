@@ -7,6 +7,48 @@ import java.util.List;
 import java.util.Map;
 
 public class StatusRequest {
+
+
+    public void setAvailableModels(List<String> availableModels) {
+        this.availableModels = availableModels;
+    }
+
+    //private String status;
+    private String connectionId;
+    private String result;
+
+    private String taskId;
+
+    public void setVram(long vram) {
+        this.vram = vram;
+    }
+
+    public long getMaxRam() {
+        return maxRam;
+    }
+
+    public void setMaxRam(long maxRam) {
+        this.maxRam = maxRam;
+    }
+
+    private long vram;
+    private long maxRam ;
+    private Double cpu;
+    private Double maxCpu;
+    private Double gpu;
+    private Double maxGpu;
+    private Double diskUsage;
+    private List<String> modelsInVRAM;
+    private List<String> availableModels;
+    private Map<String, Long> diskPartitions;
+
+    public Map<String, Long> getDiskPartitions() {
+        return diskPartitions;
+    }
+
+    public void setDiskPartitions(Map<String, Long> diskPartitions) {
+        this.diskPartitions = diskPartitions;
+    }
     public String getConnectionId() {
         return connectionId;
     }
@@ -94,32 +136,5 @@ public class StatusRequest {
         return availableModels;
     }
 
-    public void setAvailableModels(List<String> availableModels) {
-        this.availableModels = availableModels;
-    }
 
-    //private String status;
-    private String connectionId;
-    private String result;
-   // @JsonProperty("task_id")
-    private String taskId;// Added to match the Agent's loop data
-    //@JsonAlias({"agentId", "pc_id", "agent_id", "pcId","idAgent"})
-    private long vram;
-    private Double cpu;
-    private Double maxCpu;
-    private Double gpu;
-    private Double maxGpu;
-    private Double diskUsage;
-    private List<String> modelsInVRAM;
-    private List<String> availableModels;
-
-    public Map<String, Long> getDiskPartitions() {
-        return diskPartitions;
-    }
-
-    public void setDiskPartitions(Map<String, Long> diskPartitions) {
-        this.diskPartitions = diskPartitions;
-    }
-
-    private Map<String, Long> diskPartitions;
 }

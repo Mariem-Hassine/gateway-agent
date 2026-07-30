@@ -57,14 +57,5 @@ public class JmsBrokerConfig {
         // scale up to 10 threads under heavy message load.
         return factory;
     }
-/*  THIS FOR ARTIMES
-    @Bean
-    public DefaultJmsListenerContainerFactory jmsListenerContainerFactory(ConnectionFactory connectionFactory) {
-        DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
-        factory.setConnectionFactory(connectionFactory);
-        factory.setConcurrency("3-10");
-        return factory;
-    }
 
- */
 }

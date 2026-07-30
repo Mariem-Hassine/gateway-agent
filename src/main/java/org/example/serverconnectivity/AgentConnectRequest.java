@@ -56,21 +56,12 @@ public class AgentConnectRequest {
     public void setDiskUsage(Double diskUsage) {
         this.diskUsage = diskUsage;
     }
-
-    public Double getMaxGpu() {
-        return maxGpu;
+    public Long getRam() {
+        return maxRam;
     }
 
-    public void setMaxGpu(Double maxGpu) {
-        this.maxGpu = maxGpu;
-    }
-
-    public Double getMaxCpu() {
-        return maxCpu;
-    }
-
-    public void setMaxCpu(Double maxCpu) {
-        this.maxCpu = maxCpu;
+    public void setMaxRam(Long maxRam) {
+        this.maxRam = maxRam;
     }
 
     public List<String> getAvailableModels() {
@@ -95,10 +86,10 @@ public class AgentConnectRequest {
     private Double gpu;
     private List<String> modelsInVRAM;
     private Double diskUsage;
+    private Long maxRam ;
 
     // rarely changes
-    private Double maxGpu;
-    private Double maxCpu;
+
     private List<String> availableModels;
     private Map<String, Long> diskPartitions; // Key: Partition (e.g. "C:"), Value: Size in MB
 

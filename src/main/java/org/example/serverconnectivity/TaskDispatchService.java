@@ -28,6 +28,9 @@ public class TaskDispatchService {
 
         pendingRequests.put(taskId, future);
 
+        // Clean up the map when the future completes or times out
+        future.whenComplete((result, ex) -> pendingRequests.remove(taskId));
+
         jmsTemplate.send("task.dispatch.queue", session -> {
             var msg = session.createTextMessage(prompt);
             msg.setStringProperty("taskId", taskId);
@@ -43,7 +46,7 @@ public class TaskDispatchService {
     // --------------------------------------------------------------------- //
 
     public String pollNextTask() {
-        jmsTemplate.setReceiveTimeout(180000L); // 200ms non-blocking check
+        jmsTemplate.setReceiveTimeout(300000L); // 200ms non-blocking check
         jakarta.jms.Message message = jmsTemplate.receive("task.dispatch.queue");
 
         if (message instanceof TextMessage textMessage) {
@@ -64,9 +67,10 @@ public class TaskDispatchService {
         if (future != null) {
             boolean completed = future.complete(result);
             System.out.println("[TaskDispatchService] Task " + taskId + " resolved successfully? " + completed);
+            System.out.println("[TaskDispatchService] Task " + taskId + " result " + result);
         } else {
-            System.err.println("[TaskDispatchService] ERROR: No pending request map entry for taskId: " + taskId);
-            System.err.println("[TaskDispatchService] Active keys in pendingRequests: " + pendingRequests.keySet());
+            System.out.println("[TaskDispatchService] Received result for " + taskId +
+                    ", but the user HTTP session already timed out or expired.");
         }
     }
 
@@ -74,6 +78,7 @@ public class TaskDispatchService {
     public void onResultReceived(jakarta.jms.Message message) throws Exception {
         String taskId = message.getStringProperty("taskId");
         String resultPayload = ((jakarta.jms.TextMessage) message).getText();
+        System.out.println("received result :)");
 
         CompletableFuture<String> future = pendingRequests.remove(taskId);
         if (future != null) {
