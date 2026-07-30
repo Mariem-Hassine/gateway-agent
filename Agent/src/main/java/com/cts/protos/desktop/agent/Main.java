@@ -24,7 +24,7 @@ public class Main {
             e.printStackTrace();
         }
     }*/
-    public static void main(String[] args) {
+   public static void main(String[] args) {
         try {
             // Initialisation obligatoire de l'espace de travail Nuts
             Nuts.require();
@@ -36,5 +36,6 @@ public class Main {
             System.err.println("[Erreur Critique] Le programme principal a rencontré un problème : " + e.getMessage());
             e.printStackTrace();
         }
-}}
+}
+}
 

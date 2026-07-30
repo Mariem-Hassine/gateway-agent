@@ -128,7 +128,7 @@ paths:
       '200':
         description: Succés
         content:
-          application/json:
+          applic!ation/json:
             schema:
               type: object
               required:

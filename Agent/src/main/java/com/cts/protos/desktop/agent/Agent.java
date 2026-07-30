@@ -15,6 +15,9 @@ import net.thevpc.nuts.command.NExec;
 import net.thevpc.nuts.elem.NElement;
 import net.thevpc.nuts.elem.NElementReader;
 import net.thevpc.nuts.elem.NElementWriter;
+import net.thevpc.nuts.platform.NEnv;
+import net.thevpc.nuts.platform.NGpu;
+import net.thevpc.nuts.platform.NOsFamily;
 
 import java.lang.management.ManagementFactory;
 
@@ -26,11 +29,20 @@ public class Agent {
     private final String gateway_invalidate_url = "http://192.168.1.119:8080/api/invalidate";
     //private final String gateway_response_url = "http://192.168.1.119:8080/api/prompt";//envoyer le resultat de l'execution d'une tache
 
+    //  Un seul client HTTP réutilisé par l'ensemble de l'agent
+    private final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+    // Objet de verrouillage pour la synchronisation concourante
+    private final Object gatewayLock = new Object();
+
     private String connectionId= null ;
     private Map<String, Object> lastRC = new HashMap<>();
+    long totalRam = NEnv.of().ram().total();//RAM totale de la machine
+
 
     OperatingSystemMXBean osBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-    long totalRam = osBean.getTotalMemorySize();//RAM totale de la machine
+    //long totalRam = osBean.getTotalMemorySize();//RAM totale de la machine
     long freeRam = osBean.getFreeMemorySize();//RAM actuelle libre
     //file d'attente pour stocker les taches recu du gateway
     private final LinkedBlockingQueue<TaskMessage> tasks = new LinkedBlockingQueue<>();
@@ -46,38 +58,35 @@ public class Agent {
             return "unknown-host-" + java.util.UUID.randomUUID().toString().substring(0, 8);
         }
     }
+    private boolean ollamaAvailable = false;
+
+   /* private boolean checkAndActivateOllama(){
+        System.out.println("test du port 11434...");
+        if(isOllamaRunning()){
+            System.out.println("ollama est deja actif");
+            this.ollamaAvailable = true;
+            return true;
+        }
+
+    }*/
+    private boolean isOllamaRunning(){
+        try{
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:11434/api/version"))
+                    .timeout(Duration.ofSeconds(2))
+                    .GET()
+                    .build();
+            HttpResponse<String> res = this.client.send(req, HttpResponse.BodyHandlers.ofString());
+            return res.statusCode() == 200;
+        }catch(Exception e){
+            return false;
+        }
+    }
 
     public Map<String, Object> construirePayloadAC() {
         long vramDispo = obtenirVramDisponible();
         List<String> modelesVRAM = obtenirModelsVram();
-
-        // Calcul universel du disque sur toutes les partitions (Windows & Linux/macOS)
-        java.io.File[] racines = java.io.File.listRoots();
-        long totalDiskAll = 0;
-        long freeDiskAll = 0;
-
-        if (racines != null) {
-            for (java.io.File racine : racines) {
-                if (racine.exists()) {
-                    totalDiskAll += racine.getTotalSpace();
-                    freeDiskAll += racine.getFreeSpace();
-                }
-            }}
-        //calculer proprement le pourcentage d'occupation de l'espace disque
-       // double diskUsage = totalDiskAll > 0 ? ((double) (totalDiskAll - freeDiskAll) / totalDiskAll) * 100.0 : 0.0;
-        double diskUsage;
-
-        // On vérifie que l'espace total est supérieur à 0 (pour éviter la division par zéro)
-        if (totalDiskAll > 0) {
-            // On calcule l'espace utilisé (Total - Libre)
-            long espaceUtilise = totalDiskAll - freeDiskAll;
-
-            // On calcule le pourcentage en convertissant en double pour garder la précision des virgules
-            diskUsage = ((double) espaceUtilise / totalDiskAll) * 100.0;
-        } else {
-            // Si aucun disque n'est détecté ou si la taille est 0, on met le pourcentage à 0 par sécurité
-            diskUsage = 0.0;
-        }
+        double availableDiskSpace = getAvailableDiskSpace();
 
         // Vraie valeur CPU
         double cpuUsage = 0.0;
@@ -91,7 +100,7 @@ public class Agent {
         }
 
         // Vraie valeur GPU basée sur l'occupation VRAM
-        long totalVramCapacity = 6442450944L;
+        long totalVramCapacity = vramTotaleReelle();
         long vramUtilisee = totalVramCapacity - vramDispo;
         double gpuUsage = totalVramCapacity > 0 ? ((double) vramUtilisee / totalVramCapacity) * 100.0 : 0.0;
 
@@ -102,7 +111,7 @@ public class Agent {
         //payload.put("maxCpu", 100.0); // Valeur réelle max du CPU
         //payload.put("maxGpu", 100.0); // Valeur réelle max du GPU
         payload.put("modelsInVRAM", modelesVRAM);
-        payload.put("diskUsage", diskUsage);
+        payload.put("diskUsage", availableDiskSpace);
         return payload;
     }
 
@@ -115,9 +124,10 @@ public class Agent {
         if (racines != null) {
             for (java.io.File racine : racines) {
                 if (racine.exists()) {
-                    diskPartitions.put(racine.getAbsolutePath(), racine.getTotalSpace());                }
-            }
-        }
+                    long totalGB = racine.getTotalSpace() / (1024 * 1024 * 1024);
+                    diskPartitions.put(racine.getAbsolutePath(), totalGB );
+                }
+        }}
         staticInfo.put("diskPartitions", diskPartitions);
         staticInfo.put("maxCpu", 100.0); // Max CPU en pourcentage
         staticInfo.put("maxGpu", 100.0);
@@ -301,11 +311,10 @@ public class Agent {
             System.err.println("[Agent] Erreur 'continue' - Code : " + response.statusCode());
         }
     }*/
-    public void sendResAndContinue(String taskId ,String result){
+    public TaskMessage sendResAndContinue(String taskId ,String result){
         if (this.connectionId == null) {
-            return;
+            return null;
         }
-
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("connectionId", this.connectionId);
@@ -318,28 +327,57 @@ public class Agent {
             String jsonPayload = NElementWriter.ofPlainJson().formatPlain(payload);
             System.out.println("[Agent] Envoi du résultat de la tâche " + taskId + " via /api/continue");
 
-            HttpClient client = HttpClient.newBuilder()
+            /*HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(35))
-                    .build();
+                    .build();*/
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(gateway_continue_url)) // Utilisation exclusive de /api/continue
                     .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = this.client.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
                 System.out.println("[Agent] Résultat bien pris en compte par la Gateway via /api/continue.");
-                // Note: La réponse du serveur 200 sur ce POST peut aussi contenir une *nouvelle* tâche directement !
-            } else {
-                System.err.println("[Agent] Erreur lors de l'envoi du résultat - Code : " + response.statusCode());
-            }
+                String body= response.body();
+                return analyserTache(body);
 
+            }
+        } catch (java.net.http.HttpTimeoutException e) {
+            System.err.println("[Consommateur] Timeout lors de l'envoi du résultat de la tâche " + taskId);
         } catch (Exception e) {
-            System.err.println("[Agent] Erreur réseau lors de l'envoi du résultat : " + e.getMessage());
+            System.err.println("[Consommateur] Erreur d'envoi : " + e.getMessage());
         }
+            return null;
+        }
+
+    private TaskMessage analyserTache(String body) {
+        if (body == null || body.trim().isEmpty() || body.contains("WAIT_NO_TASKS_AVAILABLE")) {
+            return null; // Aucune tâche disponible
+        }
+
+        String texteBrut = body.trim();
+        if (texteBrut.contains("|||")) {
+            String[] parts = texteBrut.split("\\|\\|\\|", 3);
+            if (parts.length >= 2) {
+                TaskMessage task = new TaskMessage();
+                task.setIdPrompt(parts[0].trim());
+                task.setPrompt(parts[1].trim());
+                // Récupération du modèle s'il est fourni dans la 3ème partie
+                if (parts.length == 3 && !parts[2].trim().isEmpty()) {
+                    task.setNameModel(parts[2].trim());
+                } else {
+                    task.setNameModel("qwen2:0.5b"); // Fallback de sécurité
+                }
+                return task;
+            }
+        }
+
+        System.err.println("[Agent] Format de réponse incompris depuis /api/continue : " + body);
+        return null;
     }
 
     public void start() {
@@ -384,6 +422,7 @@ public class Agent {
                     Thread.sleep(1000);//pause entre 2 appels au GW(timout=30s)
                 } catch (Exception e) {
                     System.out.println("erreur:" + e.getMessage());
+
                 }
             }
         });
@@ -396,9 +435,13 @@ public class Agent {
 
                     extraireNomModele(modeleCible); // Vérifie et installe si besoin
                     String resOllama = processeur(tache.getPrompt(), modeleCible);
-                    sendResAndContinue(tache.getIdPrompt(), resOllama);
+                    TaskMessage tacheSuivante = sendResAndContinue(tache.getIdPrompt(), resOllama);
+                    if (tacheSuivante != null) {
+                        tasks.put(tacheSuivante);
+                        System.out.println("Tâche enchaînée ajoutée à la file (ID: " + tacheSuivante.getIdPrompt() + ")");
+                    }
                 } catch (Exception e) {
-                    System.err.println("erreue:" + e.getMessage());
+                    System.err.println("Erreur consommateur : " + e.getMessage());
                 }
             }
         });
@@ -428,7 +471,7 @@ public class Agent {
     }
     // Interroge Ollama pour calculer la VRAM disponible
     public long obtenirVramDisponible() {//Retourne un long (nombre en octets)
-        long totalVramCapacity = 6442450944L; // Votre capacité totale fixe (ex: 6 Go en bytes)
+        long totalVramCapacity = vramTotaleReelle(); // Votre capacité totale fixe (ex: 6 Go en bytes)
 
         try {
             HttpClient client = HttpClient.newHttpClient();
@@ -462,6 +505,21 @@ public class Agent {
             return 0; // Par sécurité si Ollama ne répond pas
         }
     }
+    public long vramTotaleReelle (){
+        try {
+            List<NGpu> gpus = NEnv.of().gpus();
+            if (gpus != null && !gpus.isEmpty()) {
+                long total = 0;
+                for (NGpu gpu : gpus) {
+                    total += gpu.vram().total();
+                }
+                return total;
+            }
+        }catch (Exception e) {
+                System.err.println("[Agent] Erreur lecture GPU via Nuts : " + e.getMessage());
+            }
+            return 0; // fallback si Nuts ne détecte aucun GPU
+        }
     private TaskMessage recupererTacheViaContinue() throws Exception {
         if (this.connectionId == null) {
             return null;
@@ -475,79 +533,90 @@ public class Agent {
 
         String jsonPayload = NElementWriter.ofPlainJson().formatPlain(payload);
 
-        HttpClient client = HttpClient.newBuilder()
+        /*HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(35))
-                .build();
+                .build();*/
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(gateway_continue_url))
                 .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(300))
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                 .build();
+        try {
+            HttpResponse<String> response = this.client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() == 200) {
-            String body = response.body();
-            // Vérifier si la réponse contient une tâche ou un signal d'attente
-            if (body != null && !body.equals("WAIT_NO_TASKS_AVAILABLE") && body.contains("|||")) {
-                String[] parts = body.split("\\|\\|\\|", 2);
-                if (parts.length == 2) {
-                    TaskMessage task = new TaskMessage();
-                    task.setIdPrompt(parts[0]);
-                    task.setPrompt(parts[1]);
-                    // Si le modèle n'est pas fourni dans le texte brut, on attribue un défaut (ex: qwen2:0.5b)
-                    task.setNameModel("qwen2:0.5b");
-                    return task;
-                }
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                return analyserTache(body);
+            } else if (response.statusCode() == 401) {
+                reconnecter();
             }
-        } else if (response.statusCode() == 401) {
-            System.err.println("[Agent] Erreur 401 : ConnectionId invalide ou expiré. Tentative de ré-enregistrement auprès de la Gateway...");
-            try {
-                this.connectionId = null;
-                envoyerConnexionInitiale();
-                System.out.println("[Agent] Reconnexion réussie après un 401 !");
-            } catch (Exception ex) {
-                System.err.println("[Agent] Échec de la reconnexion : " + ex.getMessage() + ". Nouvelle tentative dans 5 secondes...");
-                Thread.sleep(5000);
-            }
-            return null;
+        } catch (java.net.http.HttpTimeoutException e) {
+            System.err.println("[Agent] Timeout réseau (25s) lors de la récupération de tâche.");
+        } catch (Exception e) {
+            System.err.println("[Agent] Erreur de communication avec la Gateway : " + e.getMessage());
         }
         return null;
     }
+    private synchronized void reconnecter() {
+        // Si un autre thread a déjà remis à jour le connectionId, on sort !
+        if (this.connectionId != null) {
+            return;
+        }
+        System.err.println("[Agent] ConnectionId expiré (401). Ré-enregistrement auprès de la Gateway...");
+        try {
+            envoyerConnexionInitiale();
+            System.out.println("[Agent] Reconnexion réussie !");
+        } catch (Exception ex) {
+            System.err.println("[Agent] Échec de la reconnexion : " + ex.getMessage());
+        }
+    }
 
-    //methode de recuperation d'une tache
-    /*private TaskMessage recupererTache() throws Exception {
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("vram_available", obtenirVramDisponible());
-        payload.put("agentId", idAgent);
-        String jsonPayload = NElementWriter.ofPlainJson().formatPlain(payload);
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(gateway_continue_url))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 200 && response.body() != null && !response.body().isEmpty()) {
-            NElement root = NElementReader.ofJson().read(response.body());
-            // Vérifier si la réponse est un TaskPayload valide (contient "query" ou "id")
-            if (root.isObject()) {
-                var rootObj = root.asObject().get();
-                String prompt = rootObj.getStringValue("query").orElse(null);
-                String idPrompt = rootObj.getStringValue("id").orElse(null); // ou getLongValue si l'id est un nombre
-                String nameModel = rootObj.getStringValue("nameModel").orElse(null);
-                if (prompt != null && idPrompt != null) {
-                    // Construction manuelle de votre objet TaskMessage
-                    TaskMessage task = new TaskMessage();
-                    task.setIdPrompt(idPrompt);
-                    task.setPrompt(prompt);
-                    task.setNameModel(nameModel);
-                    return task;
-                }}}
-        return null;
-    }*/
+    private String detectOS (){
+        NOsFamily famille = NEnv.of().osFamily();
+        switch (famille){
+            case WINDOWS -> {
+                return "windows";
+            }
+            case UNIX -> {
+                return "unix";
+            } case LINUX -> {
+                return "linux";
+            } case MACOS -> {
+                return "macos";
+            } default -> {
+                return "unknown";
+            }
+        }
+    }
+    private String pathOllama(){
+        // Vérifier si l'utilisateur a défini un chemin personnalisé (priorité absolue)
+        String cheminPersonnalise = System.getenv("OLLAMA_MODELS");
+        if (cheminPersonnalise != null && !cheminPersonnalise.trim().isEmpty()) {
+            return cheminPersonnalise;
+        }
+        // Si aucune variable n'est définie, utiliser le chemin par défaut
+        String userHome = NEnv.of().userHome();
+        String os = this.detectOS();
+        if(os.equals("windows")){
+            return userHome+"\\.ollama";
+        }else {
+            return userHome+"/.ollama";
+        }
+    }
+
+    public double getAvailableDiskSpace(){
+        String ollamaPath = pathOllama();
+        java.io.File folder = new java.io.File(ollamaPath);//file est un obj representant le chemin
+        while (!folder.exists() && folder.getParentFile() != null) {
+            folder = folder.getParentFile();
+        }
+
+        long freeSpaceBytes = folder.getFreeSpace();
+        return freeSpaceBytes / (1024.0 * 1024 * 1024);
+    }
 
     private String processeur(String task, String modelRequis) {
         System.out.println("[Agent] Envoi à Ollama de : " + task);
@@ -558,29 +627,23 @@ public class Agent {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:11434/api/generate"))
-                .timeout(Duration.ofSeconds(150)) // Ollama peut être lent selon le modèle
+                .timeout(Duration.ofSeconds(200)) // Ollama peut être lent selon le modèle
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                 .build();
 
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            String responseBody = response.body();
-
-            // Sécurité : Vérifier si la réponse contient bien la clé "response"
-            if (responseBody != null && responseBody.contains("\"response\":\"")) {
-                String[] parts = responseBody.split("\"response\":\"");
-                if (parts.length > 1) {
-                    String resultat = parts[1].split("\"")[0];
-                    System.out.println("[Agent] Ollama a répondu : " + resultat);
-                    return "etat:pret | resultat:" + resultat;
-                }
+            NElement root = NElementReader.ofJson().read(response.body());
+            if (root.isObject()) {
+                String resultat = root.asObject().get().getStringValue("response").orElse("");
+                System.out.println("[Agent] Ollama a répondu : " + resultat);
+                return "resultat:" + resultat;
             }
             return "etat:erreur|resultat:Format_JSON_inattendu";
-
         } catch (Exception e) {
             System.err.println("[Agent] Erreur de communication avec Ollama : " + e.getMessage());
-            return "etat:erreur|resultat:Ollama_Non_Joignable";
+            return "resultat:Ollama_Non_Joignable";
         }
     }
 
