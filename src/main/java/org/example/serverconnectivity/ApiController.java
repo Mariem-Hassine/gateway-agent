@@ -190,13 +190,16 @@ public class ApiController {
 
         if (pendingTask != null) {
             System.out.println("[Gateway] Delivering task to Agent [" + sessionData.getIdAgent() + "]: " + pendingTask);
-            return ResponseEntity.ok(pendingTask); // Returns "taskId|||prompt"
+            return ResponseEntity.ok(pendingTask);
         }
 
         // 4. IF NO TASKS WAITING, RETURN OPENAPI DEFAULT
         return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
     }
     }
+
+
+
     // owo --------------------------------------------------------------------- owo //
     // owo ----------------------- invalidate API ------------------------------ owo //
     // owo --------------------------------------------------------------------- owo //
