@@ -49,14 +49,14 @@ public class ApiController {
     // owo --------------------------------------------------------------------- owo //
     // receive the queries from the user
     @PostMapping("/api/ask")
-    public CompletableFuture<ResponseEntity<String>> receiveUserQuery(@RequestBody String query) throws InterruptedException{
+    public CompletableFuture<ResponseEntity<String>> receiveUserQuery(@RequestBody UserQueryRequest query) throws InterruptedException{
 
-        System.out.println("[Gateway] Received query from User: " + query);
+        System.out.println("[Gateway] Received query from User: " + query.getQuery()+ "' for Model: " + query.getModel());
 
 
-        // Submit prompt to JMS Queue and handle asynchronous completion
-        return taskDispatchService.submitUserQuery(query)
-                .orTimeout(180, TimeUnit.SECONDS) // Return 504 if no agent responds within 60s
+        // Submit prompt to JMS Queue and handle asynchrono
+        return taskDispatchService.submitUserQuery(query.getModel(), query.getQuery())
+                .orTimeout(180, TimeUnit.SECONDS)
                 .thenApply(ResponseEntity::ok)
                 .exceptionally(ex -> ResponseEntity.status(504).body("Request timed out waiting for an agent."));
     }

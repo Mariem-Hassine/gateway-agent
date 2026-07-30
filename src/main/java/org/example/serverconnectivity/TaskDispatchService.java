@@ -18,44 +18,37 @@ public class TaskDispatchService {
 
     private final ConcurrentHashMap<String, CompletableFuture<String>> pendingRequests = new ConcurrentHashMap<>();
 
-    public TaskDispatchService(JmsTemplate jmsTemplate) {
-        this.jmsTemplate = jmsTemplate;
-    }
-
-    public CompletableFuture<String> submitUserQuery(String prompt) {
+    public CompletableFuture<String> submitUserQuery(String requestedModel, String prompt) {
         String taskId = "TASK-" + UUID.randomUUID().toString().substring(0, 8);
         CompletableFuture<String> future = new CompletableFuture<>();
 
         pendingRequests.put(taskId, future);
 
-        // Clean up the map when the future completes or times out
-        future.whenComplete((result, ex) -> pendingRequests.remove(taskId));
-
+        // Attach both requestedModel and prompt to the RabbitMQ message
         jmsTemplate.send("task.dispatch.queue", session -> {
             var msg = session.createTextMessage(prompt);
             msg.setStringProperty("taskId", taskId);
+            msg.setStringProperty("requestedModel", requestedModel != null ? requestedModel : "default");
             return msg;
         });
 
-        System.out.println("[Gateway] Query [ " + prompt + " ] dispatched with id : " + taskId);
         return future;
     }
 
-    // --------------------------------------------------------------------- //
-    // Helper Methods Called by Controller for /api/continue HTTP Agents
-    // --------------------------------------------------------------------- //
-
     public String pollNextTask() {
-        jmsTemplate.setReceiveTimeout(300000L); // 200ms non-blocking check
+        jmsTemplate.setReceiveTimeout(15000L);
         jakarta.jms.Message message = jmsTemplate.receive("task.dispatch.queue");
 
         if (message instanceof TextMessage textMessage) {
             try {
                 String taskId = textMessage.getStringProperty("taskId");
+                String requestedModel = textMessage.getStringProperty("requestedModel");
                 String prompt = textMessage.getText();
-                return taskId + "|||" + prompt; // Matches OpenAPI format
+
+                // Format sent to agent: taskId|||requestedModel|||prompt
+                return taskId  + "|||" + prompt+ "|||" + requestedModel;
             } catch (Exception e) {
-                System.err.println("[TaskDispatchService] Failed to parse message: " + e.getMessage());
+                System.err.println("[TaskDispatchService] Error reading message: " + e.getMessage());
             }
         }
         return null;
