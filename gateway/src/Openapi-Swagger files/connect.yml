@@ -1,0 +1,92 @@
+paths:
+  /api/connect:
+    post:
+      summary: Register Agent Specs
+      description: Initial onboarding endpoint where the agent registers its hardware profiles, models, and resource limits upon startup.
+      operationId: handleAgentConnect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentConnectRequest'
+      responses:
+        '200':
+          description: Registration successful, returns generated connectionId.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  connectionId:
+                    type: string
+                    example: "CONN-A1B2C3D4"
+        '400':
+          description: Bad request due to missing or invalid idAgent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    AgentConnectRequest:
+      type: object
+      required:
+        - idAgent
+      properties:
+        idAgent:
+          type: string
+          example: "Worker-01"
+        vram:
+          type: integer
+          format: int64
+          example: 8192
+        cpu:
+          type: number
+          format: float
+          example: 12.5
+        gpu:
+          type: number
+          format: float
+          example: 5.0
+        maxCpu:
+          type: number
+          format: float
+          example: 100.0
+        maxGpu:
+          type: number
+          format: float
+          example: 100.0
+        diskUsage:
+          type: number
+          format: float
+          example: 55.0
+        modelsInVRAM:
+          type: array
+          items:
+            type: string
+          example: ["llama3:8b"]
+        availableModels:
+          type: array
+          items:
+            type: string
+          example: ["llama3:8b", "codellama:7b"]
+        diskPartitions:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        message:
+          type: string
+          example: "Invalid Request: idAgent missing."

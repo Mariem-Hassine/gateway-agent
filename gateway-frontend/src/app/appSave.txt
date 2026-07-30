@@ -1,0 +1,61 @@
+<!--center content H and add margin of lv 5*/ --> 
+<div class="container mt-5"> 
+  <div class="row justify-content-center"> <!--// H row with a flexbox that absolute centers everything of the screen/ -->
+    <div class="col-md-10"> <!--// 6 out of the 12 available grid columns on medium-sized screens (like tablets and laptops)/ -->
+      
+      <div class="card shadow-lg"> <!--// card class gives a white background container with rounded edges./ -->
+                                   <!--// shadow gives a floating effect / -->
+        
+        <div class="card-header bg-primary text-white py-3 border-0"> <!-- // header/ -->
+          <div class="d-flex align-items-center gap-2">
+            <div class="rounded-circle bg-white text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-weight: bold;">
+              A
+            </div>
+            <h6 class="mb-0">User Chat Interface that looks like ehh </h6>
+          </div>
+        </div>
+
+        <div class="card-body bg-light d-flex flex-column gap-3" style="height: 400px; overflow-y: auto;">
+          
+          @for (msg of messages; track msg.text) {
+            <div class="d-flex flex-column animate-message" 
+                 [class.align-self-end]="msg.isMe" 
+                 [class.align-self-start]="!msg.isMe">
+              
+              <div class="chat-bubble"
+                   [class.bubble-me]="msg.isMe"
+                   [class.bubble-friend]="!msg.isMe">
+                {{ msg.text }}
+              </div>
+              
+              <small class="text-muted mt-1 px-2" style="font-size: 0.75rem;" [class.text-end]="msg.isMe">
+                {{ msg.isMe ? 'You' : 'Friend' }}
+              </small>
+            </div>
+          } @empty {
+            <p class="text-center text-muted my-auto">No messages yet. Say hello!</p>
+          }
+
+        </div>
+
+        <div class="card-footer bg-white py-3 border-0">
+          <form class="d-flex gap-2">
+            <input type="text" 
+                   name="messageInput"
+                   class="form-control shadow-sm" 
+                   placeholder="Type a message..." 
+                   [(ngModel)]="newMessageText">
+            
+            <button type="submit" 
+                    class="btn btn-primary btn-send shadow-sm" 
+                    (click)="$event.preventDefault(); sendMessage()">
+              Send
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div> 

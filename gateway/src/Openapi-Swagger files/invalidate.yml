@@ -1,0 +1,42 @@
+paths:
+  /api/invalidate:
+    post:
+      summary: Notify Gateway of Agent State Changes
+      description: Called by an agent when its hardware capabilities, models, or configurations change, signaling the Gateway to mark the session for a full refresh.
+      operationId: handleAgentInvalidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - connectionId
+              properties:
+                connectionId:
+                  type: string
+                  example: "CONN-A1B2C3D4"
+      responses:
+        '200':
+          description: Invalidation request acknowledged by the Gateway.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ACKNOWLEDGED"
+        '401':
+          description: Rejecting invalidation due to missing or invalid connection ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "ERROR_INVALID_CONNECTION_ID"
