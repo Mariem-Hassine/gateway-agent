@@ -49,7 +49,18 @@
                  class="form-control shadow-sm" 
                  placeholder="Type a message..." 
                  [(ngModel)]="newMessageText">
-          
+    <!-- 2. Scrollable Choices container -->
+      <div class="choices-scroll-container d-flex gap-1 align-items-center px-1">
+        @for (choice of availableChoices; track choice) {
+          <button type="button" 
+                  class="btn btn-sm badge-chip"
+                  [class.btn-primary]="selectedChoice === choice"
+                  [class.btn-outline-secondary]="selectedChoice !== choice"
+                  (click)="selectChoice(choice)">
+            {{ choice }}
+          </button>
+        }
+      </div>
           <button type="submit" 
                   class="btn btn-primary btn-send shadow-sm" 
                   (click)="$event.preventDefault(); sendMessage()">

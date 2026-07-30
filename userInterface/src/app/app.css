@@ -116,3 +116,30 @@ html, body {
   padding: 8px 24px;
   font-weight: 500;
 }
+
+/* Scrollable wrapper between input and button */
+.choices-scroll-container {
+  max-width: 250px;           /* Adjust this width based on your design needs */
+  overflow-x: auto;          /* Enable horizontal scroll */
+  white-space: nowrap;       /* Prevent chips from wrapping */
+  scrollbar-width: thin;     /* Subtle scrollbar for Firefox */
+}
+
+/* Optional: Subtle scrollbar styling for Webkit browsers (Chrome, Edge, Safari) */
+.choices-scroll-container::-webkit-scrollbar {
+  height: 4px;
+}
+
+.choices-scroll-container::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 4px;
+}
+
+/* Clickable Badge Chips */
+.badge-chip {
+  border-radius: 12px;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  flex-shrink: 0;            /* Keeps chips at natural size inside horizontal scroll */
+  transition: all 0.2s ease;
+}

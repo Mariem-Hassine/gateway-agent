@@ -2,10 +2,16 @@ import { Component, signal, ElementRef, ViewChild, AfterViewChecked, ChangeDetec
 import { RouterOutlet } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http'; // 1. Import HttpClient
+import { timeout } from 'rxjs';
 
 interface Message {
   text: string;
   isMe: boolean;
+}
+
+interface UserQueryRequest {
+  model: string | null;
+  query: string;
 }
 
 @Component({
@@ -25,47 +31,81 @@ export class App implements AfterViewChecked {
 
   newMessageText = '';
 
-  // 2. Inject HttpClient in the constructor alongside ChangeDetectorRef
+  // 1. Add your scrollable choices & a variable for the selected one
+  availableChoices: string[] = [
+    'qwen2:0.5b',
+    'qwen2.7b'
+    
+  ];
+  selectedChoice: string | null = null;
+
   constructor(
     private cdr: ChangeDetectorRef,
     private http: HttpClient
   ) {}
 
-  sendMessage() {
-    if (!this.newMessageText.trim()) return;
-
-    const userQuery = this.newMessageText;
-
-    // 3. Render your sent message bubble immediately
-    this.messages.update(allMessages => [
-      ...allMessages,
-      { text: userQuery, isMe: true }
-    ]);
-
-    this.newMessageText = ''; // Clear input
-
-    // 4. Send HTTP POST to your Spring Boot Server
-    // Note: { responseType: 'text' } is crucial because your Java API returns raw text, not JSON!
-    this.http.post('http://localhost:8080/api/ask', userQuery, { responseType: 'text' })
-      .subscribe({
-        next: (serverResponse) => {
-          // Add the agent's real response to the chat!
-          this.messages.update(allMessages => [
-            ...allMessages,
-            { text: serverResponse, isMe: false }
-          ]);
-          this.cdr.detectChanges(); // Force repaint
-        },
-        error: (err) => {
-          console.error("Connection failed!", err);
-          this.messages.update(allMessages => [
-            ...allMessages,
-            { text: "Error: Could not reach the Gateway Server.", isMe: false }
-          ]);
-          this.cdr.detectChanges();
-        }
-      });
+  // 2. Helper method to select/deselect a choice chip
+  selectChoice(choice: string) {
+    if (this.selectedChoice === choice) {
+      this.selectedChoice = null; // Toggle off if clicked again
+    } else {
+      this.selectedChoice = choice;
+    }
   }
+  
+
+  sendMessage() {
+  if (!this.newMessageText.trim()) return;
+
+  const rawQuery = this.newMessageText.trim();
+  const selectedModel = this.selectedChoice;
+
+  // Render cleanly in chat UI (showing model tag visually to user if desired)
+  const displayText = selectedModel 
+    ? `[${selectedModel}] ${rawQuery}` 
+    : rawQuery;
+
+  this.messages.update(allMessages => [
+    ...allMessages,
+    { text: displayText, isMe: true }
+  ]);
+
+  // Build structured JSON payload
+  const requestBody: UserQueryRequest = {
+    model: selectedModel,
+    query: rawQuery
+  };
+
+  // Clear input & reset selected tag
+  this.newMessageText = ''; 
+  this.selectedChoice = null;
+
+  // POST JSON payload to backend
+  this.http.post('http://localhost:8080/api/ask', requestBody, { responseType: 'text' })
+    .pipe(timeout(300000))
+    .subscribe({
+      next: (serverResponse) => {
+        this.messages.update(allMessages => [
+          ...allMessages,
+          { text: serverResponse, isMe: false }
+        ]);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error("Connection failed or timed out!", err);
+        const isTimeout = err.name === 'TimeoutError';
+        const errorMessage = isTimeout 
+          ? "Error: Request timed out while waiting for the AI agent." 
+          : "Error: Could not reach the Gateway Server.";
+
+        this.messages.update(allMessages => [
+          ...allMessages,
+          { text: errorMessage, isMe: false }
+        ]);
+        this.cdr.detectChanges();
+      }
+    });
+}
 
   ngAfterViewChecked() {
     this.scrollToBottom();
@@ -74,8 +114,6 @@ export class App implements AfterViewChecked {
   private scrollToBottom(): void {
     try {
       this.myScrollContainer.nativeElement.scrollTop = this.myScrollContainer.nativeElement.scrollHeight;
-    } catch (err) {
-      // Container not ready yet
-    }
+    } catch (err) {}
   }
 }
