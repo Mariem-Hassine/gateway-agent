@@ -1,4 +1,4 @@
-package org.example.serverconnectivity.service;
+package org.example.serverconnectivity;
 
 import jakarta.jms.TextMessage;
 import org.springframework.beans.factory.annotation.Autowired;

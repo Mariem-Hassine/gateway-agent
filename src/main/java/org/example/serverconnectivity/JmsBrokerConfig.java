@@ -1,4 +1,4 @@
-package org.example.serverconnectivity.service;
+package org.example.serverconnectivity;
 import com.rabbitmq.jms.admin.RMQConnectionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
