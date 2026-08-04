@@ -1,4 +1,4 @@
-package org.example.serverconnectivity;
+package org.example.serverconnectivity.model;
 
 public class UserQueryRequest {
     private String model;

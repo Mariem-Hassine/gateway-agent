@@ -1,7 +1,4 @@
-package org.example.serverconnectivity;
-
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
+package org.example.serverconnectivity.model;
 
 import java.util.List;
 import java.util.Map;

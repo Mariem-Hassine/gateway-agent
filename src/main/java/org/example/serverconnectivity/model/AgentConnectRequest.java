@@ -1,8 +1,9 @@
-package org.example.serverconnectivity;
+package org.example.serverconnectivity.model;
+import jakarta.jms.TextMessage;
+import org.springframework.jms.core.JmsTemplate;
+
 import java.util.List;
 import java.util.Map;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class AgentConnectRequest {
 
@@ -99,4 +100,31 @@ public class AgentConnectRequest {
 
     public AgentConnectRequest() {}
 
+    //@Component
+    public static class AgentWorkerListener {
+
+        private final JmsTemplate jmsTemplate;
+
+        public AgentWorkerListener(JmsTemplate jmsTemplate) {
+            this.jmsTemplate = jmsTemplate;
+        }
+
+        //@JmsListener(destination = "task.dispatch.queue")
+        public void processTask(TextMessage message) throws Exception {
+            String taskId = message.getStringProperty("taskId");
+            String prompt = message.getText();
+
+            System.out.println("[Agent Node] Executing Task ID: " + taskId + " with prompt: " + prompt);
+
+            // Simulate agent processing output
+            String resultText = "Executed agent response for prompt: " + prompt;
+
+            // Send completed answer back through JMS
+            jmsTemplate.send("task.result.queue", session -> {
+                var reply = session.createTextMessage(resultText);
+                reply.setStringProperty("taskId", taskId);
+                return reply;
+            });
+        }
+    }
 }

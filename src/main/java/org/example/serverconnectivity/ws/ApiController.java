@@ -1,16 +1,17 @@
-package org.example.serverconnectivity;
-import org.example.serverconnectivity.TaskDispatchService.*;
+package org.example.serverconnectivity.ws;
 
+import org.example.serverconnectivity.service.TaskDispatchService;
+import org.example.serverconnectivity.model.AgentConnectRequest;
+import org.example.serverconnectivity.model.StatusRequest;
+import org.example.serverconnectivity.model.UserQueryRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
 @CrossOrigin(origins = "*")
@@ -196,14 +197,9 @@ public class ApiController {
         // 4. IF NO TASKS WAITING, RETURN OPENAPI DEFAULT
         return ResponseEntity.ok("WAIT_NO_TASKS_AVAILABLE");
     }
-    }
-
-
-
-    // owo --------------------------------------------------------------------- owo //
     // owo ----------------------- invalidate API ------------------------------ owo //
     // owo --------------------------------------------------------------------- owo //
-    /*@PostMapping("/api/invalidate")
+    @PostMapping("/api/invalidate")
     public ResponseEntity<Map<String, String>> handleAgentInvalidate(@RequestBody Map<String, String> request) {
         String connectionId = request.get("connectionId");
 
@@ -222,11 +218,18 @@ public class ApiController {
 
         // sends a notification to the agent to ack the invalidation
         return ResponseEntity.ok(Map.of("status", "ACKNOWLEDGED"));    }
-*/
+
 
 
     // owo --------------------------------------------------------------------- owo //
     // owo ----------------------- invalidate API ------------------------------ owo //
+    // owo --------------------------------------------------------------------- owo //
+
+
+}
+
+
+
     // owo --------------------------------------------------------------------- owo //
 
 

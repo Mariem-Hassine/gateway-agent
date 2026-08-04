@@ -1,6 +1,6 @@
 // ----------  NO LONGER USED REPLACED BY AGENTCONNECTREQUEST----------------------/
 
-package org.example.serverconnectivity;
+package org.example.serverconnectivity.model;
 
 
 public class CurrentState {
